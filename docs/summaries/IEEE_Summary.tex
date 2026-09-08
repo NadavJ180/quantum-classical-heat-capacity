@@ -55,7 +55,7 @@ The broader aim of this project is to find operating regimes in which a quantum 
 Recent work has shown that a working substance with strongly enhanced energy fluctuations can let a heat engine approach the Carnot point without sacrificing power \cite{campisifazio2016}, and that the heat capacity of a small quantum system directly constrains the work a cyclic engine can extract \cite{ye2017}. Since $C_v(T)=k_B\beta^2\mathrm{Var}(E)$ is by definition a measure of those fluctuations, a genuine Schottky enhancement -- a system whose \emph{quantum} $C_v$ transiently exceeds its \emph{classical} value -- is exactly the kind of effect this project is searching for. Concretely, the goal is to find such a system, quantify how the enhancement would translate into engine efficiency relative to the classical limit, test whether it generalizes across a family of potentials, and use that to propose a concrete experimental realization. This report documents the groundwork -- a general-purpose numerical tool that computes $C_v(T)$, quantum and classical, for any smooth one-dimensional potential, without which a genuine enhancement could not be searched for systematically.
 
 \subsection{Approach: A Self-Validating, Closed-Form-Free Pipeline}
-Two ingredients make the pipeline usable on an arbitrary potential. First, the classical limit is reached not by taking $\hbar\to0$ directly, but by scanning a dimensionless factor $\xi$ that plays the role of $1/\hbar$ for it to be experimentally verifiable (Section~\ref{sec:theory}). Second -- and central to this report -- every energy spectrum the pipeline produces is checked not against an analytic formula, which does not exist for most potentials of interest, but against an independently generated, higher-resolution numerical reference computed by the same DVR solver (Section~\ref{sec:validation}). This self-consistent ground truth is the only one available once the project moves past the textbook cases, so this semester's central deliverable is showing that it can be trusted: Section~\ref{sec:validation} confirms it agrees with the HO, the one case where the exact answer is known, to machine precision.
+Two ingredients make the pipeline usable on an arbitrary potential. First, the classical limit is reached not by taking $\hbar\to0$ directly -- $\hbar$ is a fixed constant of nature, not a quantity that can actually be dialed down -- but by scanning a dimensionless factor $\xi$ that plays the role of $1/\hbar$, realized instead by rescaling temperature and potential energy, quantities the calculation is genuinely free to vary; this is what makes the $\xi$-scan a physically implementable route to $\hbar\to0$ rather than a fiction (Section~\ref{sec:theory}). Second -- and central to this report -- every energy spectrum the pipeline produces is checked not against an analytic formula, which does not exist for most potentials of interest, but against an independently generated, higher-resolution numerical reference computed by the same DVR solver (Section~\ref{sec:validation}). This self-consistent ground truth is the only one available once the project moves past the textbook cases, so this semester's central deliverable is showing that it can be trusted: Section~\ref{sec:validation} confirms it agrees with the HO, the one case where the exact answer is known, to machine precision.
 
 % ===================== II. THEORY =====================
 \section{Theoretical Background}
@@ -93,7 +93,7 @@ tending to the equipartition value $k_B$ as $\beta\hbar\omega\to0$. Equation~\eq
 \label{sec:dvr}
 
 \subsection{Why a Grid-Based Representation Works at All}
-For potentials with no analytical spectrum, $\{E_n\}$ is obtained from a Colbert--Miller sinc discrete variable representation (DVR) \cite{colbertmiller1992,lightcarrington2000}, which represents the wavefunction by its values on an evenly spaced, discrete grid rather than by continuous function in an analytical basis. Because the grid is just a set of samples, it inherits a basic result from signal processing, the Nyquist--Shannon sampling theorem: a signal can only be reconstructed faithfully from evenly spaced samples if it is sampled at least twice per cycle of its fastest-oscillating component; sampled any coarser, that fast-oscillating content does not simply disappear -- it reappears disguised as a spurious, slower-looking signal (\emph{aliasing}). For a wavefunction, the relevant ``frequency'' is the local wavenumber $k(x)$, which depends on both the state's energy $E$ and position $x$ (Section~\ref{sec:dvr}-D gives the specific value the grid spacing is set from): a state's local de Broglie wavelength $\lambda(x)=2\pi/k(x)$ sets how fast $\psi(x)$ oscillates at that point, so the grid spacing must resolve the \emph{shortest} such wavelength anywhere the wavefunction has significant amplitude, or that high-momentum content aliases back into the low-lying, physically relevant part of the computed spectrum as 'fake' eigenvalues.
+For potentials with no analytical spectrum, $\{E_n\}$ is obtained from a Colbert--Miller sinc discrete variable representation (DVR) \cite{colbertmiller1992,lightcarrington2000}, which represents the wavefunction directly by its values at a discrete set of evenly spaced grid points, rather than -- as in a traditional basis-set expansion -- by a set of coefficients multiplying smooth, closed-form functions (Hermite polynomials, plane waves, and the like). Because the grid is just a set of samples, it inherits a basic result from signal processing, the Nyquist--Shannon sampling theorem: a signal can only be reconstructed faithfully from evenly spaced samples if it is sampled at least twice per cycle of its fastest-oscillating component; sampled any coarser, that fast-oscillating content does not simply disappear -- it reappears disguised as a spurious, slower-looking signal (\emph{aliasing}). For a wavefunction, the relevant ``frequency'' is the local wavenumber $k(x)$, which depends on both the state's energy $E$ and position $x$ (Section~\ref{sec:dvr}-D gives the specific value the grid spacing is set from): a state's local de Broglie wavelength $\lambda(x)=2\pi/k(x)$ sets how fast $\psi(x)$ oscillates at that point, so the grid spacing must resolve the \emph{shortest} such wavelength anywhere the wavefunction has significant amplitude, or that high-momentum content aliases back into the low-lying, physically relevant part of the computed spectrum as 'fake' eigenvalues.
 
 \subsection{The Kinetic-Energy Matrix}
 \label{sec:kinetic}
@@ -106,7 +106,7 @@ T_{ij} = \frac{\hbar^2}{2m\Delta x^2}\times
 \end{cases}
 \label{eq:kinetic}
 \end{equation}
-This formula is exact, not an approximation, for any wavefunction whose momentum content stays within the grid's Nyquist limit (Section~\ref{sec:dvr}-A) -- which is exactly the condition the grid spacing is chosen to guarantee. The diagonal entries cannot simply be read off the $i\neq j$ formula by setting $i=j$: doing so divides by zero rather than approaching any sensible limit, so the diagonal case is worked out on its own and turns out to be a different, finite expression. Because the off-diagonal formula depends only on how far apart two grid points are, $i-j$, and not on their absolute positions, the matrix's diagonals each repeat the same number over and over -- so only $N$ distinct values ever need to be computed, one per possible spacing, instead of $N^2$, one per matrix entry; the rest of the matrix is simply those $N$ numbers copied into place (Toeplitz matrix). Diagonalizing this matrix together with the potential then only needs to return the lowest $N_{\text{lev}}$ eigenvalues, not all $N$ of them; the linear-algebra routine used here (\texttt{eigvalsh} with an explicit index range) can extract just that low-energy slice directly, without the wasted work of also computing the high-energy states nobody asked for (LAPACK's using MRRR algorithm).
+This formula is exact, not an approximation, for any wavefunction whose momentum content stays within the grid's Nyquist limit (Section~\ref{sec:dvr}-A) -- which is exactly the condition the grid spacing is chosen to guarantee. The diagonal entries cannot simply be read off the $i\neq j$ formula by setting $i=j$: doing so divides by zero rather than approaching any sensible limit, so the diagonal case is worked out on its own and turns out to be a different, finite expression. Because the off-diagonal formula depends only on how far apart two grid points are, $i-j$, and not on their absolute positions, the matrix's diagonals each repeat the same number over and over -- so only $N$ distinct values ever need to be computed, one per possible spacing, instead of $N^2$, one per matrix entry; the rest of the matrix is simply those $N$ numbers copied into place (Toeplitz matrix). Diagonalizing this matrix together with the potential then only needs to return the lowest $N_{\text{lev}}$ eigenvalues, not all $N$ of them; the linear-algebra routine used here (\texttt{eigvalsh} with an explicit index range) can extract just that low-energy slice directly, without the wasted work of also computing the high-energy states nobody asked for (LAPACK's MRRR algorithm).
 
 \subsection{Why Only Smooth Potentials}
 The sampling argument of Section~\ref{sec:dvr}-A also explains why the solver is restricted to potentials with no true discontinuity. At a hard wall the wavefunction's derivative jumps, its momentum content becomes effectively unbounded, and no finite grid spacing can resolve it -- attempting to do so aliases the unresolvable high-momentum content back into the low-lying, physically relevant part of the spectrum. Equation~\eqref{eq:kinetic} itself is also only valid where $V(x)$ is finite everywhere the grid is evaluated; the implementation raises an explicit error rather than silently return a wrong answer if a potential violates this.
@@ -117,12 +117,12 @@ The grid span and spacing are set automatically from the potential itself, rathe
 \subsection{Limitations of the Method}
 Three limitations follow directly from the construction above, and bound what the pipeline can be trusted to produce. First, only roughly the lower half of any requested spectrum is numerically trustworthy: the highest-index states are the ones whose local momentum first exceeds what a fixed grid spacing can resolve, so $N_{\text{lev}}$ must always be requested with headroom beyond the levels actually needed (Section~\ref{sec:systems} quantifies this directly). Second, the method is restricted to smooth, single-valued, everywhere-finite potentials by Section~\ref{sec:dvr}-C; genuinely discontinuous potentials require a different DVR formulation entirely. Third, the dense $N\times N$ diagonalization means both memory and runtime scale unfavourably with the number of levels requested ($\mathcal{O}(N^2)$ and $\mathcal{O}(N^3)$ respectively) -- the practical ceiling on how far $N_{\text{lev}}$ can be pushed for a harder, anharmonic spectrum, and the motivation for the FFT-based alternative of Section~\ref{sec:future}.
 
-\begin{figure}[!t]
+\begin{figure*}[!t]
 \centering
-\includegraphics[draft=false,width=0.9\columnwidth]{fig_pipeline.png}
+\includegraphics[draft=false,width=0.85\textwidth]{fig_pipeline.png}
 \caption{Numerical workflow: solve the base spectrum, generate a higher-resolution numerical reference, verify convergence against it, compute quantum $C_v(T)$ and locate the classical plateau via the $\xi/n$-scan, and benchmark base- against reference-grid $C_v(T)$. The grid is refined automatically if the convergence check fails.}
 \label{fig:pipeline}
-\end{figure}
+\end{figure*}
 
 % ===================== IV. NUMERICAL TECHNIQUES =====================
 \section{Numerical Techniques and Implementation Safeguards}
@@ -158,12 +158,12 @@ A second check concerns the $\xi$-scan itself, and is where the two senses of ``
 \subsection{Harmonic Oscillator -- Validation Case}
 The HO is the system used to certify the methodology of Section~\ref{sec:validation}, since it is the only one where an independent, closed-form answer exists to check against. Base-grid energy levels agree with the numerical reference to within machine precision across the full spectrum (Fig.~\ref{fig:ho_energy_comparison}), settling to a flat, floating-point-limited error plateau (Fig.~\ref{fig:ho_error_vs_n}). The resulting quantum and classical-limit $C_v(T)$ curves, together with the converged $\xi$ and $n$ values certifying each point, show the same agreement (Fig.~\ref{fig:cv_summary_ho}). Figures~\ref{fig:xi_convergence}--\ref{fig:n_convergence} show a representative pair of scans at the hardest temperatures in the sweep: a genuine $\xi$-plateau followed by the finite-$N$ collapse of Section~\ref{sec:validation} (Fig.~\ref{fig:xi_convergence}), and the companion $n$-convergence check confirming that plateau is reached using only a fraction of the computed spectrum (Fig.~\ref{fig:n_convergence}) -- the two outcomes and the two checks that Section~\ref{sec:validation}-C relies on.
 
-\begin{figure}[!t]
+\begin{figure*}[!t]
 \centering
-\includegraphics[draft=false,width=0.9\columnwidth]{fig_ho_energy_comparison.png}
+\includegraphics[draft=false,width=0.85\textwidth]{fig_ho_energy_comparison.png}
 \caption{Base-grid vs. numerical-reference energy levels $E_n$ for the HO, full spectrum (left) and zoomed to the states with the largest absolute error (right).}
 \label{fig:ho_energy_comparison}
-\end{figure}
+\end{figure*}
 
 \begin{figure}[!t]
 \centering
@@ -172,12 +172,12 @@ The HO is the system used to certify the methodology of Section~\ref{sec:validat
 \label{fig:ho_error_vs_n}
 \end{figure}
 
-\begin{figure}[!t]
+\begin{figure*}[!t]
 \centering
-\includegraphics[draft=false,width=0.9\columnwidth]{fig_cv_summary_ho.png}
+\includegraphics[draft=false,width=0.7\textwidth]{fig_cv_summary_ho.png}
 \caption{Quantum $C_v(T)$ (solid) and numerical classical limit (dashed) for the HO, with converged $\xi$ and $n$ on the secondary axis. The classical limit tracks the exact equipartition value $C_v/k_B=1$.}
 \label{fig:cv_summary_ho}
-\end{figure}
+\end{figure*}
 
 The dashed plateau in Fig.~\ref{fig:cv_summary_ho} is not merely a numerical asymptote: it is the equipartition-theorem prediction for the HO's two quadratic degrees of freedom (kinetic and potential), $C_v=k_B$, derived independently of the $\xi$-scan in Appendix~\ref{sec:derivations}-C. That the numerically located plateau lands on this value, at every temperature in the sweep rather than only asymptotically at high $T$, is expected: for the HO the classical $C_v$ is exactly temperature-independent (Appendix~\ref{sec:derivations}-C), so the ``high-temperature'' equipartition value and ``the classical limit at this temperature'' coincide everywhere -- a correspondence that need not hold as cleanly for an anharmonic potential such as the double well (Section~\ref{sec:systems}-B).
 
@@ -211,19 +211,19 @@ Separately, the DVR solver's own resolution and level-count limits were characte
 \label{fig:dvr_res_n}
 \end{figure}
 
-\begin{figure}[!t]
+\begin{figure*}[!t]
 \centering
-\includegraphics[draft=false,width=0.9\columnwidth]{fig_cv_benchmark_quantum_abs.png}
+\includegraphics[draft=false,width=0.7\textwidth]{fig_cv_benchmark_quantum_abs.png}
 \caption{Quantum $C_v(T)$: fully numerical pipeline vs. the exact analytic Einstein-oscillator formula, with the absolute error shown below. Agreement is at machine precision throughout.}
 \label{fig:cv_benchmark_quantum}
-\end{figure}
+\end{figure*}
 
-\begin{figure}[!t]
+\begin{figure*}[!t]
 \centering
-\includegraphics[draft=false,width=0.9\columnwidth]{fig_cv_benchmark_classical.png}
+\includegraphics[draft=false,width=0.7\textwidth]{fig_cv_benchmark_classical.png}
 \caption{Classical-limit $C_v(T)$: fully numerical pipeline vs. the exact equipartition value $k_B$, with the relative error shown below. Every temperature point converges, at machine precision.}
 \label{fig:cv_benchmark_classical}
-\end{figure}
+\end{figure*}
 
 \subsection{Double Well -- Next System}
 The next system is a quartic double well, $V(x) = \tfrac14 x^4 + b\,x^3 - \tfrac12 x^2$, the first anharmonic potential in the pipeline. It is a harder test than the HO: its levels scale as $E_n\propto n^{4/3}$ rather than linearly, narrowing the plateau window of Eq.~\eqref{eq:xiwindow} (Section~\ref{sec:history}). The double well has no closed-form solution of its own, but it carries a validation route of a different, equally rigorous kind: near either minimum, any sufficiently smooth potential is locally well-approximated by a harmonic oscillator set by the local curvature, so the low-lying levels of a sufficiently deep well should closely match the already-certified HO benchmark of Section~\ref{sec:systems}-A -- an independent check without a second global closed-form answer. The double well is also the pipeline's first candidate for a genuine \emph{physical} Schottky anomaly: its central barrier supports a near-degenerate, tunnelling-split pair of levels well separated from the states above it, the textbook precondition for a real low-temperature $C_v(T)$ peak rather than a truncation artifact. This run is in progress; Section~\ref{sec:future} outlines the remaining steps.
