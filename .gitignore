@@ -68,3 +68,7 @@ Thumbs.db
 
 # Compiled PDFs of the report (regenerate from .tex; keep the repo diff-able)
 docs/summaries/*.pdf
+
+# Local reference-paper library (personal convenience, not part of the
+# project itself -- keep these out of the repo, they're large PDFs)
+docs/refs/
