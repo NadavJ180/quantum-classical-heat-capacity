@@ -93,7 +93,7 @@ tending to the equipartition value $k_B$ as $\beta\hbar\omega\to0$. Equation~\eq
 \label{sec:dvr}
 
 \subsection{Why a Grid-Based Representation Works at All}
-For potentials with no analytical spectrum, $\{E_n\}$ is obtained from a Colbert--Miller sinc discrete variable representation (DVR) \cite{colbertmiller1992,lightcarrington2000}, which represents the wavefunction directly by its values at a discrete set of evenly spaced grid points, rather than -- as in a traditional basis-set expansion -- by a set of coefficients multiplying smooth, closed-form functions (Hermite polynomials, plane waves, and the like). Because the grid is just a set of samples, it inherits a basic result from signal processing, the Nyquist--Shannon sampling theorem \cite{nyquist1928,shannon1949}: a signal can only be reconstructed faithfully from evenly spaced samples if it is sampled at least twice per cycle of its fastest-oscillating component; sampled any coarser, that fast-oscillating content does not simply disappear -- it reappears disguised as a spurious, slower-looking signal (\emph{aliasing}). For a wavefunction, the relevant ``frequency'' is the local wavenumber $k(x)$, which depends on both the state's energy $E$ and position $x$ (Section~\ref{sec:dvr}-D gives the specific value the grid spacing is set from): a state's local de Broglie wavelength $\lambda(x)=2\pi/k(x)$ sets how fast $\psi(x)$ oscillates at that point, so the grid spacing must resolve the \emph{shortest} such wavelength anywhere the wavefunction has significant amplitude, or that high-momentum content aliases back into the low-lying, physically relevant part of the computed spectrum as 'fake' eigenvalues.
+For potentials with no analytical spectrum, $\{E_n\}$ is obtained from a Colbert--Miller sinc discrete variable representation (DVR) \cite{colbertmiller1992,lightcarrington2000}, which represents the wavefunction directly by its values at a discrete set of evenly spaced grid points, rather than -- as in a traditional basis-set expansion -- by a set of coefficients multiplying smooth, closed-form functions (Hermite polynomials, plane waves, and the like). Because the grid is just a set of samples, it inherits a basic result from signal processing, the Nyquist--Shannon sampling theorem \cite{nyquist1928,shannon1949}: a signal can only be reconstructed faithfully from evenly spaced samples if it is sampled at least twice per cycle of its fastest-oscillating component; sampled any coarser, that fast-oscillating content does not simply disappear -- it reappears disguised as a spurious, slower-looking signal (\emph{aliasing}). For a wavefunction, the relevant ``frequency'' is the local wavenumber $k(x)$, which depends on both the state's energy $E$ and position $x$ (Section~\ref{sec:dvr}-D gives the specific value the grid spacing is set from): a state's local de Broglie wavelength $\lambda(x)=2\pi/k(x)$ sets how fast $\psi(x)$ oscillates at that point, so the grid spacing must resolve the \emph{shortest} such wavelength anywhere the wavefunction has significant amplitude, or that high-momentum content aliases back into the low-lying, physically relevant part of the computed spectrum as `fake' eigenvalues.
 
 \subsection{The Kinetic-Energy Matrix}
 \label{sec:kinetic}
@@ -255,7 +255,10 @@ For a canonical ensemble at inverse temperature $\beta$ with partition function 
 \end{equation}
 which is the first moment of the energy under the Boltzmann weights. The heat capacity is $C_v=\partial_T\expval{E}=\left(\partial_\beta\expval{E}\right)\left(\partial_T\beta\right)$, and since $\beta=1/(k_BT)$ gives $\partial_T\beta=-k_B\beta^2$, only $\partial_\beta\expval{E}$ remains to be evaluated:
 \begin{equation}
-\frac{\partial\expval{E}}{\partial\beta} = -\frac{1}{Z^2}\frac{\partial Z}{\partial\beta}\sum_n E_ne^{-\beta E_n} - \frac{1}{Z}\sum_n E_n^2 e^{-\beta E_n} = \expval{E}^2-\expval{E^2}.
+\begin{aligned}
+\frac{\partial\expval{E}}{\partial\beta} &= -\frac{1}{Z^2}\frac{\partial Z}{\partial\beta}\sum_n E_ne^{-\beta E_n} - \frac{1}{Z}\sum_n E_n^2 e^{-\beta E_n}\\
+&= \expval{E}^2-\expval{E^2}.
+\end{aligned}
 \end{equation}
 Combining the two results, $C_v = -k_B\beta^2\left(\expval{E}^2-\expval{E^2}\right) = k_B\beta^2\,\mathrm{Var}(E)$, exactly Eq.~\eqref{eq:cv_general}. Nothing in this derivation refers to how $\{E_n\}$ was obtained, which is why the same formula applies unchanged to a closed-form spectrum or a numerically diagonalized one.
 
@@ -281,7 +284,10 @@ Z^{\text{HO}} = e^{-\beta\hbar\omega/2}\sum_{n=0}^{\infty}\left(e^{-\beta\hbar\o
 \end{equation}
 convergent since $e^{-\beta\hbar\omega}<1$ for $\beta,\hbar,\omega>0$. Differentiating $\expval{E}=-\partial_\beta\ln Z^{\text{HO}}$ gives $\expval{E}=\tfrac{\hbar\omega}{2}+\tfrac{\hbar\omega}{e^{\beta\hbar\omega}-1}$, and one further $\beta$-derivative (Appendix~\ref{sec:derivations}-A) gives, after using $\cosh$/$\sinh$ identities to simplify,
 \begin{equation}
-C_v^{\text{HO}} = k_B(\beta\hbar\omega)^2\frac{e^{\beta\hbar\omega}}{\left(e^{\beta\hbar\omega}-1\right)^2} = \frac14 k_B\left[\beta\hbar\omega\,\operatorname{csch}\!\left(\frac{\beta\hbar\omega}{2}\right)\right]^2,
+\begin{aligned}
+C_v^{\text{HO}} &= k_B(\beta\hbar\omega)^2\frac{e^{\beta\hbar\omega}}{\left(e^{\beta\hbar\omega}-1\right)^2}\\
+&= \frac14 k_B\left[\beta\hbar\omega\,\operatorname{csch}\!\left(\frac{\beta\hbar\omega}{2}\right)\right]^2,
+\end{aligned}
 \end{equation}
 the two forms being algebraically identical since $\left(e^{x}-1\right)^2=e^{x}\left(e^{x/2}-e^{-x/2}\right)^2$.
 
