@@ -60,7 +60,7 @@ from Quantum_Classical_Combined     import run as run_general_cv_pipeline
 from DVR.DVR_Limit_Finder           import run_dvr_limit_analysis
 from DVR.DVR_Reference_Generator    import generate_reference_energies
 from Cv_Numerical_Benchmark         import run_cv_numerical_benchmark
-from config                         import (MASS, HBAR, OMEGA, my_potential,
+from config                         import (MASS, HBAR, my_potential,
                                             SYSTEM_NAME, T_UNITS_LABEL,
                                             NUM_STATES, BETA_MIN, BETA_MAX,
                                             N_BETA, XI_START, TOL_XI,
@@ -199,7 +199,7 @@ if __name__ == "__main__":
         error_result=energy_error, zoom=True,
         system_name=f"{SYSTEM_NAME} [{ref_label}]",
     )
-    # Plot 2: absolute and relative error vs state index n (log y-axis)
+    # Plot 2: relative error vs state index n (log y-axis)
     plot_energy_level_error(
         energy_error,
         system_name=f"{SYSTEM_NAME} — base DVR vs {ref_label}",

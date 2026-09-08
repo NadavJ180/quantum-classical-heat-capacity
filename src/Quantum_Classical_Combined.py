@@ -40,7 +40,6 @@ CHANGELOG (v1.8 -> v1.9)
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-from tqdm import tqdm
 
 from Classical_Limit_Numerical import compute_cv, sweep_temperature_range
 
@@ -159,8 +158,8 @@ def plot_n_convergence_diagnostic(n_result, beta_val, T_K_val, tol_cv, system_na
     -------
     None (displays the figure).
     """
-    BLUE, GREEN, ORANGE, PURPLE = "#1f77b4", "#2ca02c", "#d62728", "#9467bd"
-    ns, cvs, deltas = n_result["n_values"], n_result["cv_values"], n_result["deltas"]
+    BLUE, GREEN, ORANGE = "#1f77b4", "#2ca02c", "#d62728"
+    ns, cvs = n_result["n_values"], n_result["cv_values"]
     fig, ax = plt.subplots(figsize=(8, 5))
     fig.suptitle(f"{system_name} \u2014 n-Convergence Diagnostic\nHardest T: {T_K_val:.2f}  (\u03b2 = {beta_val:.4f})", fontsize=12, fontweight="bold")
     ax.plot(ns, cvs, color=BLUE, linewidth=1.5, marker="o", markersize=3, zorder=3, label="Cv(n levels)")
@@ -289,7 +288,8 @@ def run(energies, system_name,
     beta_arr = np.linspace(beta_min, beta_max, n_beta)
     T_arr = 1.0 / beta_arr
 
-    print(f"\n{'\u2550'*60}\n  {system_name}\n{'\u2550'*60}")
+    rule = "\u2550" * 60
+    print(f"\n{rule}\n  {system_name}\n{rule}")
     print(f"  {len(energies)} levels, E_min={energies[0]:.3g}, E_max={energies[-1]:.3g}")
     print(f"  \u03b2: {beta_min} \u2192 {beta_max}  ({n_beta} points)")
 
@@ -326,6 +326,6 @@ def run(energies, system_name,
 
     print(f"\n  \u03be-conv: {valid_xi_mask.sum()}/{n_beta}  (max \u03be={np.nanmax(xi_conv):.2f})" if valid_xi_mask.any() else "  \u03be-conv: not applicable")
     print(f"  n-conv: {valid_n_mask.sum()}/{n_beta}  (max n={int(np.nanmax(n_conv))})" if valid_n_mask.any() else "  n-conv: failed at all T")
-    print(f"{'\u2550'*60}\n")
+    print(f"{rule}\n")
 
     return {"beta_arr": beta_arr, "T_arr": T_arr, "cv_quantum": cv_quantum, "cv_classical": cv_classical, "xi_conv": xi_conv, "n_conv": n_conv, "sweep": sweep}

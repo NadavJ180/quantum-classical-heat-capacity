@@ -575,7 +575,6 @@ def plot_grid_limit_search(grid_result, system_name="System"):
     trace = sorted(grid_result["trace"], key=lambda t: t["dx"])
     dxs  = [t["dx"]  for t in trace]
     errs = [t["error"] for t in trace]
-    pts  = [t["num_points"] for t in trace]
 
     fig, ax = plt.subplots(figsize=(8, 5))
     fig.suptitle(

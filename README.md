@@ -30,9 +30,9 @@ src/
     ├── plot_potential.py         Potential-shape figure generator
     └── pipeline_diagram.py       Workflow-diagram generator
 
-figures/            Generated plots (HO/, SymmetricDoubleWell/, plus standalone figures)
+figures/            Generated plots (HO/, SymmetricDoubleWell/ [name predates the b != 0 run below, so the well is currently asymmetric], plus standalone figures)
 docs/summaries/      IEEE_Summary.tex (main report), Meetings_Summary.tex (meeting notes + derivations)
-results/             Scratch/intermediate run outputs (not tracked)
+docs/SchottkyAnomaly/  Reference literature (Schottky-anomaly papers)
 ```
 
 ## Pipeline Overview

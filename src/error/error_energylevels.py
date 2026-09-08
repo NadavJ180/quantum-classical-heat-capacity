@@ -189,9 +189,9 @@ def plot_energy_level_comparison(E_numeric, E_analytic, error_result=None, zoom=
 # =====================================================================
 def plot_energy_level_error(error_result, system_name="Harmonic Oscillator"):
     """
-    Plot absolute and relative error vs state index n on a log y-axis
-    -- the most direct way to see how DVR accuracy degrades for
-    higher excited states on a fixed grid.
+    Plot relative error vs state index n on a log y-axis -- the most
+    direct way to see how DVR accuracy degrades for higher excited
+    states on a fixed grid.
 
     Parameters
     ----------
@@ -204,11 +204,10 @@ def plot_energy_level_error(error_result, system_name="Harmonic Oscillator"):
     -------
     None (displays the figure).
     """
-    abs_error = error_result["abs_error"]
     rel_error = error_result["rel_error"]
     n = np.arange(len(rel_error))
 
-    BLUE, RED = "#1f77b4", "#d62728"
+    RED = "#d62728"
     fig, ax = plt.subplots(figsize=(8, 5))
     fig.suptitle(f"{system_name} \n DVR Energy-Level Error vs State Index", fontsize=13, fontweight="bold")
 

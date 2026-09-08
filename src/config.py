@@ -31,11 +31,11 @@ T_UNITS_LABEL = r"$k_B T \,/\, \hbar\omega$"
 '''
 
 def my_potential(x):
-        """1-D symmetric double well: V(x) = 1/4 x^4 - 1/2 x^2."""
+        """1-D asymmetric double well: V(x) = 1/4 x^4 + b x^3 - 1/2 x^2 (b != 0 breaks the x -> -x symmetry; b = 0 recovers the symmetric well)."""
         a, b, c, d = 0.25, -0.5, -0.5, 0
         return a * (x ** 4) + b * (x ** 3) + c * (x **2) + d * x
 
-SYSTEM_NAME   = "1-D symmetric double well"
+SYSTEM_NAME   = "1-D asymmetric double well"
 T_UNITS_LABEL = r"$k_B T \,/\, \hbar\omega$"
 
 # --- DVR base grid: number of energy levels ---
