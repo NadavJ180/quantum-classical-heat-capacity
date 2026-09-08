@@ -93,7 +93,7 @@ tending to the equipartition value $k_B$ as $\beta\hbar\omega\to0$. Equation~\eq
 \label{sec:dvr}
 
 \subsection{Why a Grid-Based Representation Works at All}
-For potentials with no analytical spectrum, $\{E_n\}$ is obtained from a Colbert--Miller sinc discrete variable representation (DVR) \cite{colbertmiller1992,lightcarrington2000}, which represents the wavefunction directly by its values at a discrete set of evenly spaced grid points, rather than -- as in a traditional basis-set expansion -- by a set of coefficients multiplying smooth, closed-form functions (Hermite polynomials, plane waves, and the like). Because the grid is just a set of samples, it inherits a basic result from signal processing, the Nyquist--Shannon sampling theorem \cite{nyquist1928,shannon1949}: a signal can only be reconstructed faithfully from evenly spaced samples if it is sampled at least twice per cycle of its fastest-oscillating component; sampled any coarser, that fast-oscillating content does not simply disappear -- it reappears disguised as a spurious, slower-looking signal (\emph{aliasing}). For a wavefunction, the relevant ``frequency'' is the local wavenumber $k(x)$, which depends on both the state's energy $E$ and position $x$ (Section~\ref{sec:dvr}-D gives the specific value the grid spacing is set from): a state's local de Broglie wavelength $\lambda(x)=2\pi/k(x)$ sets how fast $\psi(x)$ oscillates at that point, so the grid spacing must resolve the \emph{shortest} such wavelength anywhere the wavefunction has significant amplitude, or that high-momentum content aliases back into the low-lying, physically relevant part of the computed spectrum as `fake' eigenvalues.
+For potentials with no analytical spectrum, $\{E_n\}$ is obtained from a Colbert--Miller sinc discrete variable representation (DVR) \cite{colbertmiller1992,lightcarrington2000}, which represents the wavefunction directly by its values at a discrete set of evenly spaced grid points, rather than -- as in a traditional basis-set expansion -- by a set of coefficients multiplying smooth, closed-form functions (Hermite polynomials, plane waves, and the like). Because the grid is just a set of samples, it inherits a basic result from signal processing, the Nyquist--Shannon sampling theorem \cite{oppenheimschafer}: a signal can only be reconstructed faithfully from evenly spaced samples if it is sampled at least twice per cycle of its fastest-oscillating component; sampled any coarser, that fast-oscillating content does not simply disappear -- it reappears disguised as a spurious, slower-looking signal (\emph{aliasing}). For a wavefunction, the relevant ``frequency'' is the local wavenumber $k(x)$, which depends on both the state's energy $E$ and position $x$ (Section~\ref{sec:dvr}-D gives the specific value the grid spacing is set from): a state's local de Broglie wavelength $\lambda(x)=2\pi/k(x)$ sets how fast $\psi(x)$ oscillates at that point, so the grid spacing must resolve the \emph{shortest} such wavelength anywhere the wavefunction has significant amplitude, or that high-momentum content aliases back into the low-lying, physically relevant part of the computed spectrum as `fake' eigenvalues.
 
 \subsection{The Kinetic-Energy Matrix}
 \label{sec:kinetic}
@@ -324,11 +324,8 @@ Z. Ye, Y. Hu, J. He, and J. Wang, ``Universality of maximum-work efficiency of a
 \bibitem{kozin2025}
 V. K. Kozin, D. Miserev, D. Loss, and J. Klinovaja, ``Schottky anomaly in a cavity-coupled double quantum well,'' \emph{Phys. Rev. Res.}, vol. 7, p. 033239, 2025.
 
-\bibitem{nyquist1928}
-H. Nyquist, ``Certain topics in telegraph transmission theory,'' \emph{Trans. AIEE}, vol. 47, no. 2, pp. 617--644, Apr. 1928.
-
-\bibitem{shannon1949}
-C. E. Shannon, ``Communication in the presence of noise,'' \emph{Proc. IRE}, vol. 37, no. 1, pp. 10--21, Jan. 1949.
+\bibitem{oppenheimschafer}
+A. V. Oppenheim and R. W. Schafer, \emph{Discrete-Time Signal Processing}, 3rd ed. Upper Saddle River, NJ: Prentice Hall, 2010.
 
 \end{thebibliography}
 
