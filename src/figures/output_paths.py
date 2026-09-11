@@ -19,10 +19,15 @@ the repo-root figures/ folder organized as runs accumulate:
              to run unattended: every (system, params) combination
              gets its own directory tree, keyed only by the values
              actually used, with no manual bookkeeping required.
-<category>-- which kind of diagnostic the figure is (energy_levels,
-             convergence, cv, cv_benchmark, dvr_limits, potential),
-             matching the categories already named in FINDINGS.md's
-             "Reading the Diagnostic Plots" table.
+<category>-- which kind of diagnostic the figure is: energy_levels
+             (includes the potential-shape plot from plot_potential.py --
+             it's an energy-level diagnostic too, just not a computed-
+             error one), convergence, cv (both the quantum/classical Cv
+             summary and the base-vs-reference/analytic benchmarks --
+             kept in one folder rather than splitting by how the
+             comparison curve was obtained), or dvr_limits. Matches the
+             categories already named in FINDINGS.md's "Reading the
+             Diagnostic Plots" table.
 
 Every path component (system, params, category, and every figure
 filename) is built only from [A-Za-z0-9_-] -- no spaces, dots, commas,
@@ -173,8 +178,8 @@ def save_figure(fig, category, name, dpi=220, close=True):
     fig : matplotlib.figure.Figure
         The figure to save (the caller's `fig, ax = plt.subplots(...)`).
     category : str
-        One of "energy_levels", "convergence", "cv", "cv_benchmark",
-        "dvr_limits", "potential" (or any other short, consistent tag).
+        One of "energy_levels", "convergence", "cv", "dvr_limits"
+        (or any other short, consistent tag).
     name : str
         Filename without extension, e.g. "cv_summary".
     dpi : int, optional

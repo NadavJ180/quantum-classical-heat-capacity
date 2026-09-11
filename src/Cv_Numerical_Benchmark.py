@@ -260,7 +260,7 @@ def plot_quantum_cv_comparison(T_arr, cv_base, cv_ref, error_result,
     ax_bot.set_yscale("log")
     ax_bot.grid(True, linestyle="--", alpha=0.4)
     plt.tight_layout()
-    save_figure(fig, "cv_benchmark", "quantum_cv_benchmark")
+    save_figure(fig, "cv", "quantum_cv_benchmark")
 
 
 # =====================================================================
@@ -357,7 +357,7 @@ def plot_classical_limit_comparison(T_arr, cv_classical_base, cv_classical_ref,
     ax_bot.set_yscale("log")
     ax_bot.grid(True, linestyle="--", alpha=0.4)
     plt.tight_layout()
-    save_figure(fig, "cv_benchmark", "classical_limit_cv_benchmark")
+    save_figure(fig, "cv", "classical_limit_cv_benchmark")
 
 
 # =====================================================================
