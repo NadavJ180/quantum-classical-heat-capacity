@@ -26,6 +26,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from analytical.HO_Analytical import analytic_cv_HO_quantum, analytic_cv_HO_classical
+from figures.output_paths import save_figure
 
 
 # =====================================================================
@@ -115,7 +116,7 @@ def plot_ho_cv_benchmark(T_arr, cv_quantum_numeric, cv_quantum_analytic,
 
     Returns
     -------
-    None (displays the figure).
+    None (saves the figure to disk under figures/<system>/<params>/<category>/; see figures/output_paths.py).
     """
     BLUE, ORANGE, GREEN, PURPLE = "#1f77b4", "#d62728", "#2ca02c", "#9467bd"
 
@@ -146,7 +147,7 @@ def plot_ho_cv_benchmark(T_arr, cv_quantum_numeric, cv_quantum_analytic,
     ax_bot.grid(True, linestyle="--", alpha=0.4)
 
     plt.tight_layout()
-    plt.show()
+    save_figure(fig, "cv_benchmark", "analytic_cv_benchmark")
 
 
 # =====================================================================

@@ -60,6 +60,7 @@ import matplotlib.pyplot as plt
 
 from DVR.DVR_Algorithm import colbert_miller_dvr_1d
 from error.error_energylevels import compute_energy_level_errors
+from figures.output_paths import save_figure
 
 
 # =====================================================================
@@ -567,7 +568,7 @@ def plot_grid_limit_search(grid_result, system_name="System"):
 
     Returns
     -------
-    None (displays the figure).
+    None (saves the figure to disk under figures/<system>/<params>/<category>/; see figures/output_paths.py).
     """
     BLUE, RED, GREEN = "#1f77b4", "#d62728", "#2ca02c"
 
@@ -575,7 +576,6 @@ def plot_grid_limit_search(grid_result, system_name="System"):
     trace = sorted(grid_result["trace"], key=lambda t: t["dx"])
     dxs  = [t["dx"]  for t in trace]
     errs = [t["error"] for t in trace]
-    pts  = [t["num_points"] for t in trace]
 
     fig, ax = plt.subplots(figsize=(8, 5))
     fig.suptitle(
@@ -605,7 +605,7 @@ def plot_grid_limit_search(grid_result, system_name="System"):
     ax.legend(fontsize=9)
     ax.grid(True, linestyle="--", alpha=0.4)
     plt.tight_layout()
-    plt.show()
+    save_figure(fig, "dvr_limits", "resolution_limit")
 
 
 # =====================================================================
@@ -632,7 +632,7 @@ def plot_level_limit_search(level_result, system_name="System"):
 
     Returns
     -------
-    None (displays the figure).
+    None (saves the figure to disk under figures/<system>/<params>/<category>/; see figures/output_paths.py).
     """
     BLUE, RED, GREEN = "#1f77b4", "#d62728", "#2ca02c"
 
@@ -669,7 +669,7 @@ def plot_level_limit_search(level_result, system_name="System"):
     ax.legend(fontsize=9)
     ax.grid(True, linestyle="--", alpha=0.4)
     plt.tight_layout()
-    plt.show()
+    save_figure(fig, "dvr_limits", "level_limit")
 
 
 # =====================================================================

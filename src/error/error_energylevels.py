@@ -31,6 +31,8 @@ CHANGELOG (v1.0 -> v1.1)
 import numpy as np
 import matplotlib.pyplot as plt
 
+from figures.output_paths import save_figure
+
 
 # =====================================================================
 # Compute absolute/relative error between numerical and analytic levels
@@ -130,7 +132,7 @@ def plot_energy_level_comparison(E_numeric, E_analytic, error_result=None, zoom=
 
     Returns
     -------
-    None (displays the figure).
+    None (saves the figure to disk under figures/<system>/<params>/<category>/; see figures/output_paths.py).
     """
     E_numeric = np.asarray(E_numeric, dtype=float)
     E_analytic = np.asarray(E_analytic, dtype=float)
@@ -181,7 +183,7 @@ def plot_energy_level_comparison(E_numeric, E_analytic, error_result=None, zoom=
         ax_zoom.grid(True, linestyle="--", alpha=0.5)
 
     plt.tight_layout()
-    plt.show()
+    save_figure(fig, "energy_levels", "energy_level_comparison")
 
 
 # =====================================================================
@@ -189,9 +191,9 @@ def plot_energy_level_comparison(E_numeric, E_analytic, error_result=None, zoom=
 # =====================================================================
 def plot_energy_level_error(error_result, system_name="Harmonic Oscillator"):
     """
-    Plot absolute and relative error vs state index n on a log y-axis
-    -- the most direct way to see how DVR accuracy degrades for
-    higher excited states on a fixed grid.
+    Plot relative error vs state index n on a log y-axis -- the most
+    direct way to see how DVR accuracy degrades for higher excited
+    states on a fixed grid.
 
     Parameters
     ----------
@@ -202,13 +204,12 @@ def plot_energy_level_error(error_result, system_name="Harmonic Oscillator"):
 
     Returns
     -------
-    None (displays the figure).
+    None (saves the figure to disk under figures/<system>/<params>/<category>/; see figures/output_paths.py).
     """
-    abs_error = error_result["abs_error"]
     rel_error = error_result["rel_error"]
     n = np.arange(len(rel_error))
 
-    BLUE, RED = "#1f77b4", "#d62728"
+    RED = "#d62728"
     fig, ax = plt.subplots(figsize=(8, 5))
     fig.suptitle(f"{system_name} \n DVR Energy-Level Error vs State Index", fontsize=13, fontweight="bold")
 
@@ -224,7 +225,7 @@ def plot_energy_level_error(error_result, system_name="Harmonic Oscillator"):
     ax.legend(fontsize=9, loc="upper left")
 
     plt.tight_layout()
-    plt.show()
+    save_figure(fig, "energy_levels", "energy_level_relative_error")
 
 
 # =====================================================================

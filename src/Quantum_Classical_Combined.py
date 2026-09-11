@@ -40,9 +40,9 @@ CHANGELOG (v1.8 -> v1.9)
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-from tqdm import tqdm
 
 from Classical_Limit_Numerical import compute_cv, sweep_temperature_range
+from figures.output_paths import save_figure
 
 
 # =====================================================================
@@ -98,7 +98,7 @@ def plot_xi_convergence_diagnostic(xi_result, beta_val, T_K_val, tol_xi, system_
 
     Returns
     -------
-    None (displays the figure).
+    None (saves the figure to disk under figures/<system>/<params>/<category>/; see figures/output_paths.py).
     """
     BLUE, GREEN, ORANGE, YELLOW, GRAY = "#1f77b4", "#2ca02c", "#d62728", "#bcbd22", "#7f7f7f"
     xis, cvs, deltas = xi_result["xi_values"], xi_result["cv_values"], xi_result["deltas"]
@@ -130,7 +130,7 @@ def plot_xi_convergence_diagnostic(xi_result, beta_val, T_K_val, tol_xi, system_
     ax.set_ylabel("Cv / kB", fontsize=11)
     ax.grid(True, linestyle="--", alpha=0.5)
     plt.tight_layout()
-    plt.show()
+    save_figure(fig, "convergence", "xi_convergence")
 
 
 # =====================================================================
@@ -157,10 +157,10 @@ def plot_n_convergence_diagnostic(n_result, beta_val, T_K_val, tol_cv, system_na
 
     Returns
     -------
-    None (displays the figure).
+    None (saves the figure to disk under figures/<system>/<params>/<category>/; see figures/output_paths.py).
     """
-    BLUE, GREEN, ORANGE, PURPLE = "#1f77b4", "#2ca02c", "#d62728", "#9467bd"
-    ns, cvs, deltas = n_result["n_values"], n_result["cv_values"], n_result["deltas"]
+    BLUE, GREEN, ORANGE = "#1f77b4", "#2ca02c", "#d62728"
+    ns, cvs = n_result["n_values"], n_result["cv_values"]
     fig, ax = plt.subplots(figsize=(8, 5))
     fig.suptitle(f"{system_name} \u2014 n-Convergence Diagnostic\nHardest T: {T_K_val:.2f}  (\u03b2 = {beta_val:.4f})", fontsize=12, fontweight="bold")
     ax.plot(ns, cvs, color=BLUE, linewidth=1.5, marker="o", markersize=3, zorder=3, label="Cv(n levels)")
@@ -178,7 +178,7 @@ def plot_n_convergence_diagnostic(n_result, beta_val, T_K_val, tol_cv, system_na
     ax.set_ylabel("Cv / kB", fontsize=11)
     ax.grid(True, linestyle="--", alpha=0.5)
     plt.tight_layout()
-    plt.show()
+    save_figure(fig, "convergence", "n_convergence")
 
 
 # =====================================================================
@@ -214,7 +214,7 @@ def plot_cv_curves(T_arr, cv_quantum, cv_classical, xi_conv_arr, n_conv_arr, sys
 
     Returns
     -------
-    None (displays the figure).
+    None (saves the figure to disk under figures/<system>/<params>/<category>/; see figures/output_paths.py).
     """
     BLUE, GREEN, ORANGE, PURPLE, RED = "#1f77b4", "#2ca02c", "#d62728", "#9467bd", "#d62728"
     fig, ax1 = plt.subplots(figsize=(9, 6))
@@ -238,7 +238,7 @@ def plot_cv_curves(T_arr, cv_quantum, cv_classical, xi_conv_arr, n_conv_arr, sys
     ax2.tick_params(axis="y", colors=PURPLE)
     ax2.legend(fontsize=9, loc="upper right")
     plt.tight_layout()
-    plt.show()
+    save_figure(fig, "cv", "cv_summary")
 
 
 # =====================================================================
@@ -289,7 +289,8 @@ def run(energies, system_name,
     beta_arr = np.linspace(beta_min, beta_max, n_beta)
     T_arr = 1.0 / beta_arr
 
-    print(f"\n{'\u2550'*60}\n  {system_name}\n{'\u2550'*60}")
+    rule = "\u2550" * 60
+    print(f"\n{rule}\n  {system_name}\n{rule}")
     print(f"  {len(energies)} levels, E_min={energies[0]:.3g}, E_max={energies[-1]:.3g}")
     print(f"  \u03b2: {beta_min} \u2192 {beta_max}  ({n_beta} points)")
 
@@ -326,6 +327,6 @@ def run(energies, system_name,
 
     print(f"\n  \u03be-conv: {valid_xi_mask.sum()}/{n_beta}  (max \u03be={np.nanmax(xi_conv):.2f})" if valid_xi_mask.any() else "  \u03be-conv: not applicable")
     print(f"  n-conv: {valid_n_mask.sum()}/{n_beta}  (max n={int(np.nanmax(n_conv))})" if valid_n_mask.any() else "  n-conv: failed at all T")
-    print(f"{'\u2550'*60}\n")
+    print(f"{rule}\n")
 
     return {"beta_arr": beta_arr, "T_arr": T_arr, "cv_quantum": cv_quantum, "cv_classical": cv_classical, "xi_conv": xi_conv, "n_conv": n_conv, "sweep": sweep}

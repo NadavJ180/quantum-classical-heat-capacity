@@ -59,6 +59,7 @@ import matplotlib.pyplot as plt
 
 from Classical_Limit_Numerical import sweep_temperature_range
 from Quantum_Classical_Combined import compute_quantum_heat_capacity_curve
+from figures.output_paths import save_figure
 
 
 # =====================================================================
@@ -223,7 +224,7 @@ def plot_quantum_cv_comparison(T_arr, cv_base, cv_ref, error_result,
 
     Returns
     -------
-    None (displays the figure).
+    None (saves the figure to disk under figures/<system>/<params>/<category>/; see figures/output_paths.py).
     """
     BLUE, ORANGE, RED = "#1f77b4", "#d62728", "#d62728"
 
@@ -259,7 +260,7 @@ def plot_quantum_cv_comparison(T_arr, cv_base, cv_ref, error_result,
     ax_bot.set_yscale("log")
     ax_bot.grid(True, linestyle="--", alpha=0.4)
     plt.tight_layout()
-    plt.show()
+    save_figure(fig, "cv_benchmark", "quantum_cv_benchmark")
 
 
 # =====================================================================
@@ -302,7 +303,7 @@ def plot_classical_limit_comparison(T_arr, cv_classical_base, cv_classical_ref,
 
     Returns
     -------
-    None (displays the figure).
+    None (saves the figure to disk under figures/<system>/<params>/<category>/; see figures/output_paths.py).
     """
     GREEN, ORANGE, RED = "#2ca02c", "#d62728", "#d62728"
 
@@ -356,7 +357,7 @@ def plot_classical_limit_comparison(T_arr, cv_classical_base, cv_classical_ref,
     ax_bot.set_yscale("log")
     ax_bot.grid(True, linestyle="--", alpha=0.4)
     plt.tight_layout()
-    plt.show()
+    save_figure(fig, "cv_benchmark", "classical_limit_cv_benchmark")
 
 
 # =====================================================================

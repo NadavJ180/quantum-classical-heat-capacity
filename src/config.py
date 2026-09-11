@@ -14,6 +14,18 @@ sweep, ...) as a side effect of the import.
 To switch systems: edit `my_potential`, `SYSTEM_NAME`, and
 `T_UNITS_LABEL` below (swap which block is commented out), exactly as
 before. Nothing else in the repository needs to change.
+
+POTENTIAL_PARAMS is the single source of truth for this run's named
+potential parameters: `my_potential` reads its coefficients from it
+(so there is exactly one place to change a value -- no separate label
+that can drift out of sync with the actual formula), and it is also
+what figures/output_paths.py uses to name each run's figure folder
+(figures/<system>/<params>/<category>/...). This is what makes a
+future bulk scan -- e.g. over a range of the double well's `b` --
+land every parameter combination in its own, unambiguous folder: each
+iteration just sets POTENTIAL_PARAMS (or calls
+figures.output_paths.set_context directly) before re-running the
+pipeline.
 =====================================================================
 """
 
@@ -22,20 +34,25 @@ MASS, HBAR, OMEGA = 1.0, 1.0, 1.0
 
 # --- Potential function (swap this for any smooth V(x)) ---
 r'''
-def my_potential(x):
+POTENTIAL_PARAMS = {"mass": MASS, "omega": OMEGA}
+
+def my_potential(x, p=POTENTIAL_PARAMS):
     """1-D harmonic oscillator: V(x) = ½ m ω² x²."""
-    return 0.5 * MASS * (OMEGA**2) * x**2
+    return 0.5 * p["mass"] * (p["omega"]**2) * x**2
 
 SYSTEM_NAME   = "1-D Harmonic Oscillator"
 T_UNITS_LABEL = r"$k_B T \,/\, \hbar\omega$"
 '''
 
-def my_potential(x):
-        """1-D symmetric double well: V(x) = 1/4 x^4 - 1/2 x^2."""
-        a, b, c, d = 0.25, -0.5, -0.5, 0
-        return a * (x ** 4) + b * (x ** 3) + c * (x **2) + d * x
+# a, b, c, d: coefficients of V(x) = a*x^4 + b*x^3 + c*x^2 + d*x.
+# b != 0 breaks the x -> -x symmetry (b = 0 recovers the symmetric well).
+POTENTIAL_PARAMS = {"a": 0.25, "b": -0.5, "c": -0.5, "d": 0.0}
 
-SYSTEM_NAME   = "1-D symmetric double well"
+def my_potential(x, p=POTENTIAL_PARAMS):
+        """1-D asymmetric double well: V(x) = a x^4 + b x^3 + c x^2 + d x."""
+        return p["a"] * (x ** 4) + p["b"] * (x ** 3) + p["c"] * (x ** 2) + p["d"] * x
+
+SYSTEM_NAME   = "1-D asymmetric double well"
 T_UNITS_LABEL = r"$k_B T \,/\, \hbar\omega$"
 
 # --- DVR base grid: number of energy levels ---

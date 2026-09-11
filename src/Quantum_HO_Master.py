@@ -60,8 +60,10 @@ from Quantum_Classical_Combined     import run as run_general_cv_pipeline
 from DVR.DVR_Limit_Finder           import run_dvr_limit_analysis
 from DVR.DVR_Reference_Generator    import generate_reference_energies
 from Cv_Numerical_Benchmark         import run_cv_numerical_benchmark
-from config                         import (MASS, HBAR, OMEGA, my_potential,
+from figures.output_paths           import set_context as set_figure_context
+from config                         import (MASS, HBAR, my_potential,
                                             SYSTEM_NAME, T_UNITS_LABEL,
+                                            POTENTIAL_PARAMS,
                                             NUM_STATES, BETA_MIN, BETA_MAX,
                                             N_BETA, XI_START, TOL_XI,
                                             MIN_STABLE_XI, XI_MULT,
@@ -122,8 +124,13 @@ if __name__ == "__main__":
     # src/figures/plot_potential.py) without running this entire
     # pipeline as a side effect. Edit config.py to change system,
     # parameters, or reference scaling -- nothing here needs to change.
+    #
+    # Every figure saved below lands under
+    # figures/<system>/<params>/<category>/ -- keyed off SYSTEM_NAME and
+    # POTENTIAL_PARAMS, so a later run with different parameters (e.g. a
+    # bulk scan over the double well's b) never overwrites this one.
     # =================================================================
-
+    set_figure_context(SYSTEM_NAME, POTENTIAL_PARAMS)
 
     # =================================================================
     # SECTION 1 -- DVR base computation
@@ -199,7 +206,7 @@ if __name__ == "__main__":
         error_result=energy_error, zoom=True,
         system_name=f"{SYSTEM_NAME} [{ref_label}]",
     )
-    # Plot 2: absolute and relative error vs state index n (log y-axis)
+    # Plot 2: relative error vs state index n (log y-axis)
     plot_energy_level_error(
         energy_error,
         system_name=f"{SYSTEM_NAME} — base DVR vs {ref_label}",
