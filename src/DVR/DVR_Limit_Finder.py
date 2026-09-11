@@ -568,7 +568,7 @@ def plot_grid_limit_search(grid_result, system_name="System"):
 
     Returns
     -------
-    None (displays the figure).
+    None (saves the figure to disk under figures/<system>/<params>/<category>/; see figures/output_paths.py).
     """
     BLUE, RED, GREEN = "#1f77b4", "#d62728", "#2ca02c"
 
@@ -606,7 +606,6 @@ def plot_grid_limit_search(grid_result, system_name="System"):
     ax.grid(True, linestyle="--", alpha=0.4)
     plt.tight_layout()
     save_figure(fig, "dvr_limits", "resolution_limit")
-    plt.show()
 
 
 # =====================================================================
@@ -633,7 +632,7 @@ def plot_level_limit_search(level_result, system_name="System"):
 
     Returns
     -------
-    None (displays the figure).
+    None (saves the figure to disk under figures/<system>/<params>/<category>/; see figures/output_paths.py).
     """
     BLUE, RED, GREEN = "#1f77b4", "#d62728", "#2ca02c"
 
@@ -671,7 +670,6 @@ def plot_level_limit_search(level_result, system_name="System"):
     ax.grid(True, linestyle="--", alpha=0.4)
     plt.tight_layout()
     save_figure(fig, "dvr_limits", "level_limit")
-    plt.show()
 
 
 # =====================================================================

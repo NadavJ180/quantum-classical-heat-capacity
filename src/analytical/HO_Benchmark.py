@@ -116,7 +116,7 @@ def plot_ho_cv_benchmark(T_arr, cv_quantum_numeric, cv_quantum_analytic,
 
     Returns
     -------
-    None (displays the figure).
+    None (saves the figure to disk under figures/<system>/<params>/<category>/; see figures/output_paths.py).
     """
     BLUE, ORANGE, GREEN, PURPLE = "#1f77b4", "#d62728", "#2ca02c", "#9467bd"
 
@@ -148,7 +148,6 @@ def plot_ho_cv_benchmark(T_arr, cv_quantum_numeric, cv_quantum_analytic,
 
     plt.tight_layout()
     save_figure(fig, "cv_benchmark", "analytic_cv_benchmark")
-    plt.show()
 
 
 # =====================================================================

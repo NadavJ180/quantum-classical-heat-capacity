@@ -132,7 +132,7 @@ def plot_energy_level_comparison(E_numeric, E_analytic, error_result=None, zoom=
 
     Returns
     -------
-    None (displays the figure).
+    None (saves the figure to disk under figures/<system>/<params>/<category>/; see figures/output_paths.py).
     """
     E_numeric = np.asarray(E_numeric, dtype=float)
     E_analytic = np.asarray(E_analytic, dtype=float)
@@ -184,7 +184,6 @@ def plot_energy_level_comparison(E_numeric, E_analytic, error_result=None, zoom=
 
     plt.tight_layout()
     save_figure(fig, "energy_levels", "energy_level_comparison")
-    plt.show()
 
 
 # =====================================================================
@@ -205,7 +204,7 @@ def plot_energy_level_error(error_result, system_name="Harmonic Oscillator"):
 
     Returns
     -------
-    None (displays the figure).
+    None (saves the figure to disk under figures/<system>/<params>/<category>/; see figures/output_paths.py).
     """
     rel_error = error_result["rel_error"]
     n = np.arange(len(rel_error))
@@ -227,7 +226,6 @@ def plot_energy_level_error(error_result, system_name="Harmonic Oscillator"):
 
     plt.tight_layout()
     save_figure(fig, "energy_levels", "energy_level_relative_error")
-    plt.show()
 
 
 # =====================================================================

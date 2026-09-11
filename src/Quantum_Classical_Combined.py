@@ -98,7 +98,7 @@ def plot_xi_convergence_diagnostic(xi_result, beta_val, T_K_val, tol_xi, system_
 
     Returns
     -------
-    None (displays the figure).
+    None (saves the figure to disk under figures/<system>/<params>/<category>/; see figures/output_paths.py).
     """
     BLUE, GREEN, ORANGE, YELLOW, GRAY = "#1f77b4", "#2ca02c", "#d62728", "#bcbd22", "#7f7f7f"
     xis, cvs, deltas = xi_result["xi_values"], xi_result["cv_values"], xi_result["deltas"]
@@ -131,7 +131,6 @@ def plot_xi_convergence_diagnostic(xi_result, beta_val, T_K_val, tol_xi, system_
     ax.grid(True, linestyle="--", alpha=0.5)
     plt.tight_layout()
     save_figure(fig, "convergence", "xi_convergence")
-    plt.show()
 
 
 # =====================================================================
@@ -158,7 +157,7 @@ def plot_n_convergence_diagnostic(n_result, beta_val, T_K_val, tol_cv, system_na
 
     Returns
     -------
-    None (displays the figure).
+    None (saves the figure to disk under figures/<system>/<params>/<category>/; see figures/output_paths.py).
     """
     BLUE, GREEN, ORANGE = "#1f77b4", "#2ca02c", "#d62728"
     ns, cvs = n_result["n_values"], n_result["cv_values"]
@@ -180,7 +179,6 @@ def plot_n_convergence_diagnostic(n_result, beta_val, T_K_val, tol_cv, system_na
     ax.grid(True, linestyle="--", alpha=0.5)
     plt.tight_layout()
     save_figure(fig, "convergence", "n_convergence")
-    plt.show()
 
 
 # =====================================================================
@@ -216,7 +214,7 @@ def plot_cv_curves(T_arr, cv_quantum, cv_classical, xi_conv_arr, n_conv_arr, sys
 
     Returns
     -------
-    None (displays the figure).
+    None (saves the figure to disk under figures/<system>/<params>/<category>/; see figures/output_paths.py).
     """
     BLUE, GREEN, ORANGE, PURPLE, RED = "#1f77b4", "#2ca02c", "#d62728", "#9467bd", "#d62728"
     fig, ax1 = plt.subplots(figsize=(9, 6))
@@ -241,7 +239,6 @@ def plot_cv_curves(T_arr, cv_quantum, cv_classical, xi_conv_arr, n_conv_arr, sys
     ax2.legend(fontsize=9, loc="upper right")
     plt.tight_layout()
     save_figure(fig, "cv", "cv_summary")
-    plt.show()
 
 
 # =====================================================================

@@ -9,13 +9,14 @@ the repo-root figures/ folder organized as runs accumulate:
     figures/<system>/<params>/<category>/<name>.png
 
 <system>  -- slug of SYSTEM_NAME (e.g. "1_d_asymmetric_double_well").
-<params>  -- slug of the potential's parameter values (e.g.
-             "a=0.25,b=-0.5,c=-0.5,d=0"), so that two runs of the SAME
-             potential with DIFFERENT parameters (the double well's
-             `b`, say) land in separate folders instead of overwriting
-             each other. This is what makes a future bulk scan over a
-             range of parameter values (e.g. b = -1.0, -0.9, ..., 1.0)
-             safe to run unattended: every (system, params) combination
+<params>  -- LaTeX-safe slug of the potential's parameter values (e.g.
+             "a-0p25_b-m0p5_c-m0p5_d-0" for {"a":0.25,"b":-0.5,
+             "c":-0.5,"d":0.0}), so that two runs of the SAME potential
+             with DIFFERENT parameters (the double well's `b`, say)
+             land in separate folders instead of overwriting each
+             other. This is what makes a future bulk scan over a range
+             of parameter values (e.g. b = -1.0, -0.9, ..., 1.0) safe
+             to run unattended: every (system, params) combination
              gets its own directory tree, keyed only by the values
              actually used, with no manual bookkeeping required.
 <category>-- which kind of diagnostic the figure is (energy_levels,
@@ -23,14 +24,27 @@ the repo-root figures/ folder organized as runs accumulate:
              matching the categories already named in FINDINGS.md's
              "Reading the Diagnostic Plots" table.
 
+Every path component (system, params, category, and every figure
+filename) is built only from [A-Za-z0-9_-] -- no spaces, dots, commas,
+equals signs, or other characters that LaTeX's \includegraphics /
+\graphicspath can be fussy about -- so the whole figures/ tree can be
+pointed at directly from a .tex file (or copied wholesale into a
+LaTeX figures/ folder) without renaming anything by hand. See _encode
+below for exactly how a value is turned into a filename-safe token
+("-" for a minus sign, "p" for a decimal point -- so 0.25 -> "0p25"
+and -0.5 -> "m0p5").
+
 USAGE
 ---------------------------------------------------------------------
 A driver script calls `set_context(SYSTEM_NAME, POTENTIAL_PARAMS)`
 once, near the start of a run (Quantum_HO_Master.py and
 figures/plot_potential.py both do this from config.py's values).
 Every plotting function then calls `save_figure(fig, category, name)`
-right before `plt.show()`; it resolves the current run's directory
-tree from that context, creates it if needed, and writes the PNG.
+once its figure is finished; it resolves the current run's directory
+tree from that context, creates it if needed, writes the PNG, and (by
+default) closes the figure -- no plt.show() anywhere in this pipeline,
+so a run never blocks on a plot window and a long/bulk run never
+accumulates open figures.
 
 If no context has been set (e.g. a plotting function is called
 directly, outside any driver script -- common when iterating in a
@@ -49,6 +63,8 @@ in a loop.
 
 import os
 import re
+
+import matplotlib.pyplot as plt
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 FIGURES_ROOT = os.path.join(REPO_ROOT, "figures")
@@ -84,16 +100,31 @@ def _slugify(text):
     return slug or "unnamed_system"
 
 
-# Only characters that are actually unsafe/awkward in a path component
-# are replaced here -- unlike _slugify, "=", ",", "-", and "." are kept
-# AS IS, because stripping "-" would make "b=-0.5" and "b=0.5" collide
-# into the same folder name, which is exactly wrong for a parameter scan.
-_UNSAFE_PATH_CHARS = re.compile(r'[<>:"/\\|?*\s]+')
+# Whatever survives _encode() below is stripped down to this set as a final
+# safety net, so a stray character in a future parameter name/value can
+# never leak an unsafe character into a path LaTeX will be pointed at.
+_NOT_LATEX_SAFE = re.compile(r"[^A-Za-z0-9_-]+")
+
+
+def _encode(text):
+    """
+    Turn arbitrary text into a token built only from [A-Za-z0-9_-] --
+    safe to use anywhere in a LaTeX \\includegraphics / \\graphicspath
+    argument with no escaping. "-" (minus sign) becomes "m" and "."
+    (decimal point) becomes "p" -- in that order, and as a blanket
+    substitution rather than only at the start of the string, so this
+    handles a minus sign anywhere it appears (e.g. in "1e-05") -- so a
+    negative value never collides with its positive counterpart the
+    way plain digit-stripping would (-0.5 -> "m0p5", 0.5 -> "0p5":
+    still distinct).
+    """
+    encoded = str(text).replace("-", "m").replace(".", "p")
+    return _NOT_LATEX_SAFE.sub("_", encoded)
 
 
 def _fmt_value(v):
-    """Format a single parameter value for the folder name: floats use
-    %g (drops trailing zeros: 0.2500 -> "0.25"), everything else str()."""
+    """Format a single parameter value before encoding: floats use %g
+    (drops trailing zeros: 0.2500 -> "0.25"), everything else str()."""
     if isinstance(v, float):
         return f"{v:g}"
     return str(v)
@@ -102,8 +133,8 @@ def _fmt_value(v):
 def _params_dirname(params):
     if not params:
         return "default_params"
-    parts = [f"{k}={_fmt_value(v)}" for k, v in params.items()]
-    return _UNSAFE_PATH_CHARS.sub("_", ",".join(parts))
+    parts = [f"{_encode(k)}-{_encode(_fmt_value(v))}" for k, v in params.items()]
+    return "_".join(parts)
 
 
 def figure_dir(category):
@@ -116,13 +147,13 @@ def figure_dir(category):
         FIGURES_ROOT,
         _slugify(system_name),
         _params_dirname(_context["params"]),
-        category,
+        _encode(category),
     )
     os.makedirs(d, exist_ok=True)
     return d
 
 
-def save_figure(fig, category, name, dpi=220):
+def save_figure(fig, category, name, dpi=220, close=True):
     """
     Save `fig` as <name>.png under this run's <category> folder
     (figures/<system>/<params>/<category>/<name>.png), overwriting any
@@ -130,6 +161,12 @@ def save_figure(fig, category, name, dpi=220):
     category) combination -- a re-run with identical parameters is
     expected to refresh its own figures in place, while a run with
     different parameters lands in a different folder entirely.
+
+    By default this also closes `fig` (via plt.close) after writing
+    it, so a long pipeline run or bulk parameter scan never leaves an
+    ever-growing pile of open figure objects around, doesn't need a
+    display, and never blocks waiting for a plot window to be closed.
+    Pass close=False if the caller still needs `fig` afterward.
 
     Parameters
     ----------
@@ -143,12 +180,16 @@ def save_figure(fig, category, name, dpi=220):
     dpi : int, optional
         Output resolution (default 220, matching the rest of the
         project's figure-generating scripts).
+    close : bool, optional
+        Close `fig` after saving (default True).
 
     Returns
     -------
     path : str
         The full path the figure was written to.
     """
-    path = os.path.join(figure_dir(category), f"{name}.png")
+    path = os.path.join(figure_dir(category), f"{_encode(name)}.png")
     fig.savefig(path, dpi=dpi, bbox_inches="tight")
+    if close:
+        plt.close(fig)
     return path
