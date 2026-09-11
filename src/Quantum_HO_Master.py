@@ -11,6 +11,8 @@ DVR computation on a finer/wider grid.
 
     SECTION 0 -- Configuration            (all parameters here)
     SECTION 1 -- DVR base computation     (DVR_Algorithm_1_4)
+                 also saves the potential-shape figure (plot_potential.py),
+                 reusing this section's grid/energies -- no separate run needed
     SECTION 2 -- Numerical reference      (DVR_Reference_Generator_1_0)
     SECTION 3 -- Energy-level accuracy    (HO_Energy_Level_Error_1_1)
                  base DVR vs reference DVR, level by level
@@ -61,6 +63,7 @@ from DVR.DVR_Limit_Finder           import run_dvr_limit_analysis
 from DVR.DVR_Reference_Generator    import generate_reference_energies
 from Cv_Numerical_Benchmark         import run_cv_numerical_benchmark
 from figures.output_paths           import set_context as set_figure_context
+from figures.plot_potential         import plot_potential_with_spectrum
 from config                         import (MASS, HBAR, my_potential,
                                             SYSTEM_NAME, T_UNITS_LABEL,
                                             POTENTIAL_PARAMS,
@@ -152,6 +155,17 @@ if __name__ == "__main__":
             x_min=x_min, x_max=x_max, num_points=n_grid,
             mass=MASS, hbar=HBAR,
         )
+
+    # Potential-shape figures (V(x) with the computed spectrum overlaid;
+    # one full-spectrum overview, one zoomed on the well's own minima).
+    # Reuses the grid/energies just computed above -- no extra DVR solve --
+    # so this never needs to be run separately via plot_potential.py.
+    potential_fig_paths = plot_potential_with_spectrum(
+        x_min, x_max, my_potential, energies_base, SYSTEM_NAME,
+        levels_to_draw=NUM_STATES,
+    )
+    print(f"  Potential-shape figures saved: {potential_fig_paths['full_spectrum']}, "
+          f"{potential_fig_paths['zoomed']}")
 
     # =================================================================
     # SECTION 2 -- Numerical reference generation
