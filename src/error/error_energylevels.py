@@ -31,6 +31,8 @@ CHANGELOG (v1.0 -> v1.1)
 import numpy as np
 import matplotlib.pyplot as plt
 
+from figures.output_paths import save_figure
+
 
 # =====================================================================
 # Compute absolute/relative error between numerical and analytic levels
@@ -181,6 +183,7 @@ def plot_energy_level_comparison(E_numeric, E_analytic, error_result=None, zoom=
         ax_zoom.grid(True, linestyle="--", alpha=0.5)
 
     plt.tight_layout()
+    save_figure(fig, "energy_levels", "energy_level_comparison")
     plt.show()
 
 
@@ -223,6 +226,7 @@ def plot_energy_level_error(error_result, system_name="Harmonic Oscillator"):
     ax.legend(fontsize=9, loc="upper left")
 
     plt.tight_layout()
+    save_figure(fig, "energy_levels", "energy_level_relative_error")
     plt.show()
 
 

@@ -60,6 +60,7 @@ import matplotlib.pyplot as plt
 
 from DVR.DVR_Algorithm import colbert_miller_dvr_1d
 from error.error_energylevels import compute_energy_level_errors
+from figures.output_paths import save_figure
 
 
 # =====================================================================
@@ -604,6 +605,7 @@ def plot_grid_limit_search(grid_result, system_name="System"):
     ax.legend(fontsize=9)
     ax.grid(True, linestyle="--", alpha=0.4)
     plt.tight_layout()
+    save_figure(fig, "dvr_limits", "resolution_limit")
     plt.show()
 
 
@@ -668,6 +670,7 @@ def plot_level_limit_search(level_result, system_name="System"):
     ax.legend(fontsize=9)
     ax.grid(True, linestyle="--", alpha=0.4)
     plt.tight_layout()
+    save_figure(fig, "dvr_limits", "level_limit")
     plt.show()
 
 

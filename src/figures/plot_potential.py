@@ -21,11 +21,11 @@ Run from anywhere; paths are resolved relative to this file.
 Usage:
     python plot_potential.py
 Output:
-    figures/fig_potential_<system>.png   (repo-root figures/ folder)
+    figures/<system>/<params>/potential/potential.png
+    (see src/figures/output_paths.py for the naming scheme)
 """
 
 import os
-import re
 import sys
 
 import numpy as np
@@ -38,29 +38,22 @@ import matplotlib.pyplot as plt
 # ---------------------------------------------------------------------
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 SRC_DIR = os.path.abspath(os.path.join(THIS_DIR, ".."))
-REPO_ROOT = os.path.abspath(os.path.join(SRC_DIR, ".."))
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
-from config import MASS, HBAR, NUM_STATES, SYSTEM_NAME, my_potential  # noqa: E402
+from config import MASS, HBAR, NUM_STATES, SYSTEM_NAME, POTENTIAL_PARAMS, my_potential  # noqa: E402
 from DVR.DVR_Algorithm import (                                        # noqa: E402
     auto_configure_dvr,
     get_fully_converged_energy_levels,
 )
+from figures.output_paths import set_context, save_figure             # noqa: E402
 
 # ============================== USER CONFIG ===============================
 # Number of levels to draw. Defaults to ALL of NUM_STATES (i.e. exactly the
 # scope currently being researched, per config.py) -- override to an int
 # only if you want a deliberately reduced, less visually dense subset.
-LEVELS_TO_DRAW = NUM_STATES 
-
-OUTPUT_DIR = os.path.join(REPO_ROOT, "figures")
+LEVELS_TO_DRAW = NUM_STATES
 # ============================================================================
-
-
-def _slugify(name):
-    slug = re.sub(r"[^a-zA-Z0-9]+", "_", name.strip()).strip("_").lower()
-    return slug or "system"
 
 
 def  classical_turning_points(V, E, x):
@@ -73,6 +66,7 @@ def  classical_turning_points(V, E, x):
 
 
 def main():
+    set_context(SYSTEM_NAME, POTENTIAL_PARAMS)
     print(f"Configuring grid for '{SYSTEM_NAME}', {NUM_STATES} levels ...")
     x_min, x_max, n_grid = auto_configure_dvr(
         my_potential, NUM_STATES, mass=MASS, hbar=HBAR
@@ -124,9 +118,7 @@ def main():
     ax.legend(loc="upper center")
     fig.tight_layout()
 
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    out_path = os.path.join(OUTPUT_DIR, f"fig_potential_{_slugify(SYSTEM_NAME)}.png")
-    fig.savefig(out_path, dpi=220, bbox_inches="tight")
+    out_path = save_figure(fig, "potential", "potential")
     print(f"Saved {out_path}")
 
 

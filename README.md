@@ -27,13 +27,34 @@ src/
 ├── error/
 │   └── error_energylevels.py     Energy-level comparison (base vs. reference)
 └── figures/
+    ├── output_paths.py           Figure save-path resolver (see "Figure Output" below)
     ├── plot_potential.py         Potential-shape figure generator
     └── pipeline_diagram.py       Workflow-diagram generator
 
-figures/            Generated plots (HO/, SymmetricDoubleWell/ [name predates the b != 0 run below, so the well is currently asymmetric], plus standalone figures)
+figures/            Generated plots -- see "Figure Output" below for how a run's plots are
+                    organized under here. HO/ and SymmetricDoubleWell/ [name predates the
+                    b != 0 run in config.py, so that potential is currently asymmetric] are
+                    older, hand-saved figures kept because docs/summaries/IEEE_Summary.tex
+                    references them directly; new runs no longer write into either folder.
 docs/summaries/      IEEE_Summary.tex (main report), Meetings_Summary.tex (meeting notes + derivations)
 docs/SchottkyAnomaly/  Reference literature (Schottky-anomaly papers)
 ```
+
+## Figure Output
+
+Every figure the pipeline saves is written under:
+
+```
+figures/<system>/<params>/<category>/<name>.png
+```
+
+- `<system>` — a slug of `SYSTEM_NAME` (e.g. `1_d_asymmetric_double_well`).
+- `<params>` — a slug of `POTENTIAL_PARAMS` (e.g. `a=0.25,b=-0.5,c=-0.5,d=0`), so that two runs of the *same* potential with *different* parameters never collide or overwrite each other. This is what makes a future bulk scan — e.g. sweeping the double well's `b` over a range of values — safe to run unattended: each parameter combination lands in its own folder automatically, with no manual bookkeeping.
+- `<category>` — one of `energy_levels`, `convergence`, `cv`, `cv_benchmark`, `dvr_limits`, `potential`, matching the diagnostic categories in [`FINDINGS.md`](FINDINGS.md#reading-the-diagnostic-plots).
+
+This is implemented in [`src/figures/output_paths.py`](src/figures/output_paths.py). A driver script calls `set_context(SYSTEM_NAME, POTENTIAL_PARAMS)` once near the start of a run (`Quantum_HO_Master.py` and `plot_potential.py` both do this already); every plotting function then calls `save_figure(fig, category, name)` right before `plt.show()`. A re-run with identical parameters overwrites its own previous figures in place; a run with different parameters gets a fresh folder. A bulk-scan driver should call `set_context(...)` again at the top of each loop iteration, before that iteration's pipeline runs.
+
+The hand-authored `fig_pipeline.png` workflow diagram (`src/figures/pipeline_diagram.py`) is not tied to any particular run and is saved directly to `figures/fig_pipeline.png`, unaffected by this scheme.
 
 ## Pipeline Overview
 
@@ -50,7 +71,7 @@ Only Section 0 of `config.py` needs editing to run on a new potential — no oth
 
 ## Generalising to a New Potential
 
-1. Edit `my_potential(x)` in `src/config.py` to the new $V(x)$ (must be finite everywhere — no hard walls).
+1. Edit `POTENTIAL_PARAMS` and `my_potential(x)` in `src/config.py` to the new $V(x)$ (must be finite everywhere — no hard walls). `my_potential` should read its coefficients from `POTENTIAL_PARAMS` rather than hard-coding them twice, since that dict is also what names each run's figure folder (see "Figure Output" above).
 2. Update `SYSTEM_NAME` and `T_UNITS_LABEL` for plot labelling.
 3. Adjust `NUM_STATES`, `BETA_MIN`/`BETA_MAX`, and `XI_START` for the new system's energy scale.
 4. Run `src/Quantum_HO_Master.py` — the grid auto-configurator and reference generator adapt automatically.

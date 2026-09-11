@@ -42,6 +42,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
 from Classical_Limit_Numerical import compute_cv, sweep_temperature_range
+from figures.output_paths import save_figure
 
 
 # =====================================================================
@@ -129,6 +130,7 @@ def plot_xi_convergence_diagnostic(xi_result, beta_val, T_K_val, tol_xi, system_
     ax.set_ylabel("Cv / kB", fontsize=11)
     ax.grid(True, linestyle="--", alpha=0.5)
     plt.tight_layout()
+    save_figure(fig, "convergence", "xi_convergence")
     plt.show()
 
 
@@ -177,6 +179,7 @@ def plot_n_convergence_diagnostic(n_result, beta_val, T_K_val, tol_cv, system_na
     ax.set_ylabel("Cv / kB", fontsize=11)
     ax.grid(True, linestyle="--", alpha=0.5)
     plt.tight_layout()
+    save_figure(fig, "convergence", "n_convergence")
     plt.show()
 
 
@@ -237,6 +240,7 @@ def plot_cv_curves(T_arr, cv_quantum, cv_classical, xi_conv_arr, n_conv_arr, sys
     ax2.tick_params(axis="y", colors=PURPLE)
     ax2.legend(fontsize=9, loc="upper right")
     plt.tight_layout()
+    save_figure(fig, "cv", "cv_summary")
     plt.show()
 
 
