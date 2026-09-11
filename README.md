@@ -6,8 +6,6 @@ A modular, system-agnostic numerical pipeline for computing the heat capacity $C
 
 For the full write-up — theory, validation strategy, results, and derivations — see [`docs/summaries/IEEE_Summary.tex`](docs/summaries/IEEE_Summary.tex) (the project's IEEE-style report). For a technical summary of the physics and how to read the diagnostic plots, see [`FINDINGS.md`](FINDINGS.md). For how the pipeline evolved over the semester, see [`HISTORY.md`](HISTORY.md). Meeting-by-meeting notes and worked derivations are in [`docs/summaries/Meetings_Summary.tex`](docs/summaries/Meetings_Summary.tex).
 
-**Setup:** `pip install -r requirements.txt` (numpy, scipy, matplotlib, tqdm).
-
 ---
 
 ## Repository Structure
