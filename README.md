@@ -50,7 +50,7 @@ figures/<system>/<params>/<category>/<name>.png
 
 - `<system>` — a slug of `SYSTEM_NAME` (e.g. `1_d_asymmetric_double_well`).
 - `<params>` — a slug of `POTENTIAL_PARAMS` (e.g. `a-0p25_b-m0p5_c-m0p5_d-0` for `{"a": 0.25, "b": -0.5, "c": -0.5, "d": 0.0}`), so that two runs of the *same* potential with *different* parameters never collide or overwrite each other. This is what makes a future bulk scan — e.g. sweeping the double well's `b` over a range of values — safe to run unattended: each parameter combination lands in its own folder automatically, with no manual bookkeeping.
-- `<category>` — one of `energy_levels`, `convergence`, `cv`, `cv_benchmark`, `dvr_limits`, `potential`, matching the diagnostic categories in [`FINDINGS.md`](FINDINGS.md#reading-the-diagnostic-plots).
+- `<category>` — one of `energy_levels` (also where `plot_potential.py`'s potential-shape figure lands), `convergence`, `cv` (the quantum/classical Cv summary and every base-vs-reference or vs-analytic Cv benchmark, kept together rather than split by comparison source), or `dvr_limits` — matching the diagnostic categories in [`FINDINGS.md`](FINDINGS.md#reading-the-diagnostic-plots).
 
 Every path component and figure filename is built only from `[A-Za-z0-9_-]` — no spaces, dots, commas, or `=` signs — so the whole `figures/` tree is safe to point `\graphicspath`/`\includegraphics` at directly, or copy wholesale into a LaTeX project's figures folder, with no renaming. A value's sign and decimal point survive as letters instead of being stripped (`-` → `m`, `.` → `p`), so `b=-0.5` and `b=0.5` still land in distinct folders (`b-m0p5` vs. `b-0p5`) rather than colliding.
 

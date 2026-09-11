@@ -147,7 +147,7 @@ def plot_ho_cv_benchmark(T_arr, cv_quantum_numeric, cv_quantum_analytic,
     ax_bot.grid(True, linestyle="--", alpha=0.4)
 
     plt.tight_layout()
-    save_figure(fig, "cv_benchmark", "analytic_cv_benchmark")
+    save_figure(fig, "cv", "analytic_cv_benchmark")
 
 
 # =====================================================================

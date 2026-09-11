@@ -21,7 +21,7 @@ Run from anywhere; paths are resolved relative to this file.
 Usage:
     python plot_potential.py
 Output:
-    figures/<system>/<params>/potential/potential.png
+    figures/<system>/<params>/energy_levels/potential.png
     (see src/figures/output_paths.py for the naming scheme)
 """
 
@@ -83,18 +83,35 @@ def main():
     )
 
     levels = np.sort(np.asarray(energies))[:LEVELS_TO_DRAW]
+    n_levels = len(levels)
 
     x = np.linspace(x_min, x_max, 4000)
     V = my_potential(x)
 
+    # The auto-configured DVR grid is sized for numerical accuracy at
+    # NUM_STATES levels, so V(x) at its far edges can be orders of
+    # magnitude above anything physically interesting here. Left at
+    # full scale, those steep wings dominate the y-axis and flatten
+    # the actual well shape -- and any asymmetry between multiple
+    # wells -- into an indistinguishable sliver at the bottom. Zoom to
+    # a window that comfortably contains every drawn level instead,
+    # since that's what this figure is actually meant to show.
+    v_bottom = V.min()
+    y_top = levels[-1] + 0.15 * (levels[-1] - v_bottom)
+    y_bottom = v_bottom - 0.05 * (y_top - v_bottom)
+    x_visible = x[V <= y_top]
+    x_lo, x_hi = (x_visible.min(), x_visible.max()) if x_visible.size else (x_min, x_max)
+    x_pad = 0.08 * (x_hi - x_lo)
+
     fig, ax = plt.subplots(figsize=(7, 5))
     ax.plot(x, V, color="#1f4e8c", linewidth=2.2, label="$V(x)$", zorder=3)
+    ax.set_xlim(x_lo - x_pad, x_hi + x_pad)
+    ax.set_ylim(y_bottom, y_top)
 
     # Many levels (NUM_STATES can be in the hundreds) -> thin, semi-
     # transparent, colormap-graded lines rather than individually labelled
     # ones. This renders as a density gradient that is still informative
     # (dense near the bottom, sparser as E grows) instead of a solid block.
-    n_levels = len(levels)
     cmap = plt.cm.autumn_r
     label_every = max(1, n_levels // 10)  # label ~10 levels even if N is large
     for i, E in enumerate(levels):
@@ -107,7 +124,7 @@ def main():
             ax.hlines(E, xl, xr, color=color, linewidth=1.0,
                     alpha=0.55 if n_levels > 40 else 1.0, zorder=2)
         if n_levels <= 40 or i % label_every == 0 or i == n_levels - 1:
-            ax.text(xr + 0.015 * (x_max - x_min), E, f"$n={i}$",
+            ax.text(xr + 0.015 * (x_hi - x_lo), E, f"$n={i}$",
                      va="center", fontsize=7, color="#555555")
 
     ax.set_xlabel("$x$")
@@ -118,7 +135,7 @@ def main():
     ax.legend(loc="upper center")
     fig.tight_layout()
 
-    out_path = save_figure(fig, "potential", "potential")
+    out_path = save_figure(fig, "energy_levels", "potential")
     print(f"Saved {out_path}")
 
 
