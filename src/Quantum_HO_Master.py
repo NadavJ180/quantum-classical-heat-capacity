@@ -156,14 +156,16 @@ if __name__ == "__main__":
             mass=MASS, hbar=HBAR,
         )
 
-    # Potential-shape figure (V(x) with the computed spectrum overlaid).
+    # Potential-shape figures (V(x) with the computed spectrum overlaid;
+    # one full-spectrum overview, one zoomed on the well's own minima).
     # Reuses the grid/energies just computed above -- no extra DVR solve --
     # so this never needs to be run separately via plot_potential.py.
-    potential_fig_path = plot_potential_with_spectrum(
+    potential_fig_paths = plot_potential_with_spectrum(
         x_min, x_max, my_potential, energies_base, SYSTEM_NAME,
         levels_to_draw=NUM_STATES,
     )
-    print(f"  Potential-shape figure saved: {potential_fig_path}")
+    print(f"  Potential-shape figures saved: {potential_fig_paths['full_spectrum']}, "
+          f"{potential_fig_paths['zoomed']}")
 
     # =================================================================
     # SECTION 2 -- Numerical reference generation

@@ -51,7 +51,7 @@ figures/<system>/<params>/<category>/<name>.png
 
 - `<system>` — a slug of `SYSTEM_NAME` (e.g. `1_d_asymmetric_double_well`).
 - `<params>` — a slug of `POTENTIAL_PARAMS` (e.g. `a-0p25_b-m0p5_c-m0p5_d-0` for `{"a": 0.25, "b": -0.5, "c": -0.5, "d": 0.0}`), so that two runs of the *same* potential with *different* parameters never collide or overwrite each other. This is what makes a future bulk scan — e.g. sweeping the double well's `b` over a range of values — safe to run unattended: each parameter combination lands in its own folder automatically, with no manual bookkeeping.
-- `<category>` — one of `energy_levels` (also where `plot_potential.py`'s potential-shape figure lands), `convergence`, `cv` (the quantum/classical Cv summary and every base-vs-reference or vs-analytic Cv benchmark, kept together rather than split by comparison source), or `dvr_limits` — matching the diagnostic categories in [`FINDINGS.md`](FINDINGS.md#reading-the-diagnostic-plots).
+- `<category>` — one of `energy_levels` (also where `plot_potential.py`'s two potential-shape figures land — `potential_full_spectrum.png`, zoomed just enough to show every computed level, and `potential_zoomed.png`, zoomed tightly on the well's own minima so its shape is actually visible even at the cost of most levels falling outside the frame), `convergence`, `cv` (the quantum/classical Cv summary and every base-vs-reference or vs-analytic Cv benchmark, kept together rather than split by comparison source), or `dvr_limits` — matching the diagnostic categories in [`FINDINGS.md`](FINDINGS.md#reading-the-diagnostic-plots).
 
 Every path component and figure filename is built only from `[A-Za-z0-9_-]` — no spaces, dots, commas, or `=` signs — so the whole `figures/` tree is safe to point `\graphicspath`/`\includegraphics` at directly, or copy wholesale into a LaTeX project's figures folder, with no renaming. A value's sign and decimal point survive as letters instead of being stripped (`-` → `m`, `.` → `p`), so `b=-0.5` and `b=0.5` still land in distinct folders (`b-m0p5` vs. `b-0p5`) rather than colliding.
 
@@ -63,7 +63,7 @@ The hand-authored `fig_pipeline.png` workflow diagram (`src/figures/pipeline_dia
 
 `Quantum_HO_Master.py` runs six sequential sections, all driven by the single potential defined in `config.py`:
 
-1. **DVR base solve** — lowest `NUM_STATES` energy levels on an automatically configured grid, plus the potential-shape figure (`V(x)` with the computed spectrum overlaid, zoomed to actually show the well structure — see `plot_potential.py`).
+1. **DVR base solve** — lowest `NUM_STATES` energy levels on an automatically configured grid, plus two potential-shape figures (`V(x)` with the computed spectrum overlaid: a full-spectrum overview and a version zoomed to actually show the well structure — see `plot_potential.py`).
 2. **Numerical reference solve** — the same spectrum on an independently wider/finer grid, generated once and shared by every later step as the ground truth.
 3. **Energy-level accuracy** — base vs. reference eigenvalues, absolute and relative error.
 4. **Cv pipeline** — quantum $C_v(T)$ from the base spectrum, plus the numerical classical limit via the $\xi$/$n$-convergence scan.
