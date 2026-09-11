@@ -28,7 +28,8 @@ src/
 │   └── error_energylevels.py     Energy-level comparison (base vs. reference)
 └── figures/
     ├── output_paths.py           Figure save-path resolver (see "Figure Output" below)
-    ├── plot_potential.py         Potential-shape figure generator
+    ├── plot_potential.py         Potential-shape figure generator (called from Quantum_HO_Master.py's
+    │                             Section 1 automatically; run standalone only if you want just this figure)
     └── pipeline_diagram.py       Workflow-diagram generator
 
 figures/            Generated plots -- see "Figure Output" below for how a run's plots are
@@ -62,7 +63,7 @@ The hand-authored `fig_pipeline.png` workflow diagram (`src/figures/pipeline_dia
 
 `Quantum_HO_Master.py` runs six sequential sections, all driven by the single potential defined in `config.py`:
 
-1. **DVR base solve** — lowest `NUM_STATES` energy levels on an automatically configured grid.
+1. **DVR base solve** — lowest `NUM_STATES` energy levels on an automatically configured grid, plus the potential-shape figure (`V(x)` with the computed spectrum overlaid, zoomed to actually show the well structure — see `plot_potential.py`).
 2. **Numerical reference solve** — the same spectrum on an independently wider/finer grid, generated once and shared by every later step as the ground truth.
 3. **Energy-level accuracy** — base vs. reference eigenvalues, absolute and relative error.
 4. **Cv pipeline** — quantum $C_v(T)$ from the base spectrum, plus the numerical classical limit via the $\xi$/$n$-convergence scan.

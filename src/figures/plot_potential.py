@@ -3,18 +3,20 @@ plot_potential.py  (src/figures/)
 =====================================================================
 Plots the potential V(x) for whatever system is currently configured
 in config.py, with the ACTUAL computed energy levels overlaid -- not
-a placeholder count. Every input (potential, mass, hbar, bounds,
-number of levels) is read from config.py and DVR_Algorithm.py, the
-same modules Quantum_HO_Master.py itself uses for Section 1. That
-means this script always plots exactly the system currently being
-researched: change the potential in config.py and re-run, nothing
-here needs to be touched.
+a placeholder count.
 
-Because it calls the real grid auto-configuration and the real
-3-pass converged DVR solve for all NUM_STATES levels, this script
-does real (if modest) computation -- it is not instantaneous the way
-a purely illustrative plot would be, but the eigenvalues it draws are
-the same ones the rest of the pipeline is using.
+The reusable part is `plot_potential_with_spectrum`: given a grid span,
+potential function, and an already-computed spectrum, it builds and
+saves the figure without doing any DVR work of its own. This is what
+lets Quantum_HO_Master.py call it directly from its own Section 1,
+reusing the base grid and energies it already computed there instead
+of paying for a second 3-pass converged solve -- so running the master
+pipeline once is enough; this script never needs to be run separately
+just to get this figure.
+
+Run as a standalone script (`python plot_potential.py`), `main()` does
+its own grid auto-configuration and 3-pass converged solve first (for
+when you want just this figure, without running the full pipeline).
 
 Run from anywhere; paths are resolved relative to this file.
 
@@ -41,19 +43,7 @@ SRC_DIR = os.path.abspath(os.path.join(THIS_DIR, ".."))
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
-from config import MASS, HBAR, NUM_STATES, SYSTEM_NAME, POTENTIAL_PARAMS, my_potential  # noqa: E402
-from DVR.DVR_Algorithm import (                                        # noqa: E402
-    auto_configure_dvr,
-    get_fully_converged_energy_levels,
-)
-from figures.output_paths import set_context, save_figure             # noqa: E402
-
-# ============================== USER CONFIG ===============================
-# Number of levels to draw. Defaults to ALL of NUM_STATES (i.e. exactly the
-# scope currently being researched, per config.py) -- override to an int
-# only if you want a deliberately reduced, less visually dense subset.
-LEVELS_TO_DRAW = NUM_STATES
-# ============================================================================
+from figures.output_paths import save_figure                          # noqa: E402
 
 
 def  classical_turning_points(V, E, x):
@@ -65,7 +55,140 @@ def  classical_turning_points(V, E, x):
     return allowed.min(), allowed.max()
 
 
+def _zoom_window(x, V, v_bottom, levels):
+    """
+    Pick a (x_lo, x_hi, y_bottom, y_top) window that actually shows the
+    well's shape, rather than the full auto-configured DVR grid (which
+    is sized for numerical accuracy at however many levels were
+    requested, not for being a good picture -- at the far edges of that
+    grid V(x) can reach orders of magnitude above anything physically
+    interesting, and plotted at that scale it swamps the y-axis and
+    flattens the actual well shape, and any asymmetry between multiple
+    wells, into an indistinguishable sliver at the bottom).
+
+    Method: find every local extremum of the sampled V(x) by sign
+    changes in its discrete derivative, and keep only the maxima (a
+    local max between two wells is a barrier). If at least one interior
+    barrier exists, zoom just above the highest one -- this reveals the
+    multi-well structure near the origin even if that means most of a
+    large requested spectrum falls outside the frame, which is exactly
+    the point (their shape, not the full level count, is what this
+    figure is showing). If there's no interior barrier at all (e.g. a
+    single well like the HO), fall back to a window sized around a
+    modest number of the lowest levels instead.
+    """
+    dV = np.diff(V)
+    sign_changes = np.diff(np.sign(dV))
+    maxima_idx = np.where(sign_changes < 0)[0] + 1  # + -> - : local max
+    barriers = V[maxima_idx]
+
+    if barriers.size:
+        barrier_top = barriers.max()
+        y_top = barrier_top + 0.3 * (barrier_top - v_bottom)
+    else:
+        cap = min(len(levels), 15)
+        y_top = levels[cap - 1] if cap else v_bottom + 1.0
+
+    y_bottom = v_bottom - 0.05 * (y_top - v_bottom)
+    x_visible = x[V <= y_top]
+    x_lo, x_hi = (x_visible.min(), x_visible.max()) if x_visible.size else (x[0], x[-1])
+    return x_lo, x_hi, y_bottom, y_top
+
+
+def plot_potential_with_spectrum(x_min, x_max, potential_func, energies, system_name,
+                                  levels_to_draw=None):
+    """
+    Build and save the potential-plus-spectrum figure for an already
+    solved system -- does no DVR work itself, so it's cheap to call
+    right after a driver script has already computed `energies` on
+    [x_min, x_max].
+
+    Parameters
+    ----------
+    x_min, x_max : float
+        The grid span the energies were computed on (only used here to
+        sample V(x) for the blue curve; the actual displayed window is
+        zoomed in separately, see `_zoom_window`).
+    potential_func : callable
+        V(x) -> float or ndarray, e.g. config.my_potential.
+    energies : array_like
+        Computed energy levels (any order; sorted internally).
+    system_name : str
+        Used in the plot title. The figure's save location
+        (figures/<system>/<params>/...) is controlled separately by
+        whatever already called figures.output_paths.set_context --
+        this function does not call it, so the caller's context (set
+        once by the driver script) is what's used.
+    levels_to_draw : int or None, optional
+        How many of the lowest computed levels to overlay (default:
+        all of `energies`).
+
+    Returns
+    -------
+    path : str
+        Where the figure was saved (see `figures.output_paths.save_figure`).
+    """
+    levels = np.sort(np.asarray(energies))[:levels_to_draw]
+    n_levels = len(levels)
+
+    x = np.linspace(x_min, x_max, 4000)
+    V = potential_func(x)
+    v_bottom = V.min()
+
+    x_lo, x_hi, y_bottom, y_top = _zoom_window(x, V, v_bottom, levels)
+    x_pad = 0.08 * (x_hi - x_lo)
+
+    fig, ax = plt.subplots(figsize=(7, 5))
+    ax.plot(x, V, color="#1f4e8c", linewidth=2.2, label="$V(x)$", zorder=3)
+    ax.set_xlim(x_lo - x_pad, x_hi + x_pad)
+    ax.set_ylim(y_bottom, y_top)
+
+    # Levels above the zoomed y_top are dropped entirely -- not just
+    # axes-clipped -- because an unclipped ax.text positioned far outside
+    # the visible range still inflates savefig(bbox_inches="tight") to
+    # cover it, which previously produced a runaway-tall PNG.
+    in_view = [(i, E) for i, E in enumerate(levels) if E <= y_top]
+
+    # Thinning (a colormap-graded subset rather than every line/label) only
+    # matters when the zoom window itself still contains many levels; the
+    # usual case here is a handful near the bottom, in which case every one
+    # of them is drawn and labelled.
+    n_candidates = len(in_view)
+    thin = n_candidates > 40
+    label_every = max(1, n_candidates // 10)
+    cmap = plt.cm.autumn_r
+    n_shown = 0
+    for j, (i, E) in enumerate(in_view):
+        tp = classical_turning_points(potential_func, E, x)
+        if tp is None:
+            continue
+        xl, xr = tp
+        n_shown += 1
+        color = cmap(0.15 + 0.8 * i / max(n_levels - 1, 1))
+        if not thin or j % 10 == 0:
+            ax.hlines(E, xl, xr, color=color, linewidth=1.0,
+                    alpha=0.55 if thin else 1.0, zorder=2)
+        if not thin or j % label_every == 0 or j == n_candidates - 1:
+            ax.text(xr + 0.015 * (x_hi - x_lo), E, f"$n={i}$",
+                     va="center", fontsize=7, color="#555555")
+
+    ax.set_xlabel("$x$")
+    ax.set_ylabel("Energy")
+    shown = f"{n_shown} of {n_levels}" if n_shown < n_levels else f"{n_levels}"
+    ax.set_title(f"{system_name} -- potential and computed spectrum\n"
+                 f"({shown} levels shown)", fontsize=12, fontweight="bold")
+    ax.grid(alpha=0.3, linestyle="--")
+    ax.legend(loc="upper center")
+    fig.tight_layout()
+
+    return save_figure(fig, "energy_levels", "potential")
+
+
 def main():
+    from config import MASS, HBAR, NUM_STATES, SYSTEM_NAME, POTENTIAL_PARAMS, my_potential
+    from DVR.DVR_Algorithm import auto_configure_dvr, get_fully_converged_energy_levels
+    from figures.output_paths import set_context
+
     set_context(SYSTEM_NAME, POTENTIAL_PARAMS)
     print(f"Configuring grid for '{SYSTEM_NAME}', {NUM_STATES} levels ...")
     x_min, x_max, n_grid = auto_configure_dvr(
@@ -82,60 +205,9 @@ def main():
         mass=MASS, hbar=HBAR,
     )
 
-    levels = np.sort(np.asarray(energies))[:LEVELS_TO_DRAW]
-    n_levels = len(levels)
-
-    x = np.linspace(x_min, x_max, 4000)
-    V = my_potential(x)
-
-    # The auto-configured DVR grid is sized for numerical accuracy at
-    # NUM_STATES levels, so V(x) at its far edges can be orders of
-    # magnitude above anything physically interesting here. Left at
-    # full scale, those steep wings dominate the y-axis and flatten
-    # the actual well shape -- and any asymmetry between multiple
-    # wells -- into an indistinguishable sliver at the bottom. Zoom to
-    # a window that comfortably contains every drawn level instead,
-    # since that's what this figure is actually meant to show.
-    v_bottom = V.min()
-    y_top = levels[-1] + 0.15 * (levels[-1] - v_bottom)
-    y_bottom = v_bottom - 0.05 * (y_top - v_bottom)
-    x_visible = x[V <= y_top]
-    x_lo, x_hi = (x_visible.min(), x_visible.max()) if x_visible.size else (x_min, x_max)
-    x_pad = 0.08 * (x_hi - x_lo)
-
-    fig, ax = plt.subplots(figsize=(7, 5))
-    ax.plot(x, V, color="#1f4e8c", linewidth=2.2, label="$V(x)$", zorder=3)
-    ax.set_xlim(x_lo - x_pad, x_hi + x_pad)
-    ax.set_ylim(y_bottom, y_top)
-
-    # Many levels (NUM_STATES can be in the hundreds) -> thin, semi-
-    # transparent, colormap-graded lines rather than individually labelled
-    # ones. This renders as a density gradient that is still informative
-    # (dense near the bottom, sparser as E grows) instead of a solid block.
-    cmap = plt.cm.autumn_r
-    label_every = max(1, n_levels // 10)  # label ~10 levels even if N is large
-    for i, E in enumerate(levels):
-        tp = classical_turning_points(my_potential, E, x)
-        if tp is None:
-            continue
-        xl, xr = tp
-        color = cmap(0.15 + 0.8 * i / max(n_levels - 1, 1))
-        if i % 10 == 0:
-            ax.hlines(E, xl, xr, color=color, linewidth=1.0,
-                    alpha=0.55 if n_levels > 40 else 1.0, zorder=2)
-        if n_levels <= 40 or i % label_every == 0 or i == n_levels - 1:
-            ax.text(xr + 0.015 * (x_hi - x_lo), E, f"$n={i}$",
-                     va="center", fontsize=7, color="#555555")
-
-    ax.set_xlabel("$x$")
-    ax.set_ylabel("Energy")
-    ax.set_title(f"{SYSTEM_NAME} -- potential and computed spectrum\n"
-                 f"({n_levels} levels shown)", fontsize=12, fontweight="bold")
-    ax.grid(alpha=0.3, linestyle="--")
-    ax.legend(loc="upper center")
-    fig.tight_layout()
-
-    out_path = save_figure(fig, "energy_levels", "potential")
+    out_path = plot_potential_with_spectrum(
+        x_min, x_max, my_potential, energies, SYSTEM_NAME, levels_to_draw=NUM_STATES
+    )
     print(f"Saved {out_path}")
 
 
