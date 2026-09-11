@@ -49,7 +49,6 @@ T_UNITS_LABEL = r"$k_B T \,/\, \hbar\omega$"
 POTENTIAL_PARAMS = {"a": 0.25, "b": -0.5, "c": -0.5, "d": 0.0}
 
 def my_potential(x, p=POTENTIAL_PARAMS):
-        """1-D asymmetric double well: V(x) = a x^4 + b x^3 + c x^2 + d x."""
         return p["a"] * (x ** 4) + p["b"] * (x ** 3) + p["c"] * (x ** 2) + p["d"] * x
 
 SYSTEM_NAME   = "1-D asymmetric double well"
