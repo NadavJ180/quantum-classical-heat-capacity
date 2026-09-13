@@ -66,7 +66,7 @@ from figures.output_paths           import set_context as set_figure_context
 from figures.plot_potential         import plot_potential_with_spectrum
 from config                         import (MASS, HBAR, my_potential,
                                             SYSTEM_NAME, T_UNITS_LABEL,
-                                            POTENTIAL_PARAMS,
+                                            POTENTIAL_PARAMS, POTENTIAL_FORMULA,
                                             NUM_STATES, BETA_MIN, BETA_MAX,
                                             N_BETA, XI_START, TOL_XI,
                                             MIN_STABLE_XI, XI_MULT,
@@ -364,9 +364,14 @@ if __name__ == "__main__":
     # Compares the quantum Cv(T) curves of several variants of the
     # base potential that differ only in one named POTENTIAL_PARAMS
     # coefficient (config.SCAN_PARAM), against the single classical-
-    # limit curve already computed above for the base potential. Does
-    # NOT touch the base potential's own pipeline/results above --
-    # this section only ever adds this one new figure.
+    # limit curve already computed above for the base potential, with
+    # the potential's formula (config.POTENTIAL_FORMULA) annotated on
+    # the plot. A variant whose DVR solve fails to converge (e.g. a
+    # coefficient value that makes the potential non-confining) is
+    # skipped with a diagnostic rather than aborting the whole sweep --
+    # see Cv_Coefficient_Sweep.run_coefficient_sweep. Does NOT touch
+    # the base potential's own pipeline/results above -- this section
+    # only ever adds this one new figure.
     # =================================================================
     print("\n" + "="*60)
     print(f"  SECTION 7 — Coefficient sweep ({SCAN_PARAM})")
@@ -379,5 +384,6 @@ if __name__ == "__main__":
             base_params=POTENTIAL_PARAMS,
             scan_param=SCAN_PARAM, scan_step=SCAN_STEP, scan_count=SCAN_COUNT,
             num_states=NUM_STATES, mass=MASS, hbar=HBAR,
-            system_name=SYSTEM_NAME, T_units_label=T_UNITS_LABEL,
+            system_name=SYSTEM_NAME, formula_template=POTENTIAL_FORMULA,
+            T_units_label=T_UNITS_LABEL,
         )

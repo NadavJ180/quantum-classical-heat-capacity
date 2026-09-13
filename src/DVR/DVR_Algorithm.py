@@ -110,7 +110,15 @@ def auto_configure_dvr(potential_func, num_levels, mass=1.0, hbar=1.0, x0_guess=
     # Find the potential-well bottom
     res = opt.minimize(potential_func, x0=x0_guess)
     x_bottom = res.x[0]
-    v_min = res.fun
+    # float(...): for a non-confining potential_func (e.g. an unbounded-
+    # below polynomial), res.fun can come back as a length-1 array
+    # instead of a plain scalar; left uncoerced, that array-ness quietly
+    # propagates into E_ceiling/k_max/dx_target below and crashes the
+    # first diagnostic print's format spec (":.4g" on an array) instead
+    # of surfacing a clear error -- coercing here keeps this function's
+    # documented float-only contract regardless of what minimize() hands
+    # back for a pathological potential.
+    v_min = float(res.fun)
 
     # Energy ceiling calibrated for HO-like level spacing (E_n ~ n).
     # The adaptive loop in Stage 2 corrects the span if this

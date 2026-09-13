@@ -87,13 +87,16 @@ The temperature range (`BETA_MAX`, and optionally `BETA_MIN`) is meant to be the
 
 ## Coefficient Sweep
 
-To see how one coefficient of the current potential affects the shape of $C_v(T)$ (e.g. the double well's cubic term `b` and the size of its Schottky-anomaly-like bump), Section 7 sweeps that coefficient and plots every variant's quantum $C_v(T)$ against the base run's classical limit, in one figure (`cv/cv_coefficient_sweep.png`) — no xi/n-convergence search is redone per variant, and no other diagnostics are added to this plot.
+To see how one coefficient of the current potential affects the shape of $C_v(T)$ (e.g. the double well's cubic term `b` and the size of its Schottky-anomaly-like bump), Section 7 sweeps that coefficient and plots every variant's quantum $C_v(T)$ against the base run's classical limit, in one figure (`cv/cv_coefficient_sweep.png`) — no xi/n-convergence search is redone per variant, and no other diagnostics are added to this plot. The plot is titled with the potential's actual formula (`config.POTENTIAL_FORMULA`), the fixed coefficients shown as their numeric values and the swept one shown symbolically (e.g. `V(x) = 0.25x⁴ + bx³ -0.5x² +0x`).
 
 - `SCAN_PARAM` — which key of `POTENTIAL_PARAMS` to vary (must be a real key of that dict).
 - `SCAN_STEP` — spacing between consecutive variants.
 - `SCAN_COUNT` — how many *extra* variants to add on each side of the value already in `config.py`, so the base potential is always included as one of the curves. Total curves plotted = `2*SCAN_COUNT + 1`.
+- `POTENTIAL_FORMULA` — a template for the plot's formula annotation, written alongside `my_potential`/`POTENTIAL_PARAMS` in `config.py` and kept in sync with it by hand (same as `SYSTEM_NAME`/`T_UNITS_LABEL`). Uses `<<name>>` placeholder tokens (not Python's `{name}`) keyed by `POTENTIAL_PARAMS`' own keys, one per additive term, so they never collide with LaTeX's own braces — see `Cv_Coefficient_Sweep.format_potential_formula`. `None`, or a template with no `<<...>>` tokens at all, is fine for a potential whose formula doesn't decompose into one additive term per coefficient (e.g. the harmonic oscillator's `½mω²x²`).
 
 Note: for a potential where only odd-degree terms break the $x\to-x$ symmetry (like the double well's `b x^3`), coefficient values equidistant from 0 in opposite signs (`+b`, `-b`) give mirror-image potentials with *identical* energy spectra and therefore identical $C_v(T)$ curves — if your swept range straddles such a pair, one curve will sit exactly underneath the other. This is real physics, not a bug.
+
+**If a variant doesn't converge:** not every coefficient value produces a genuinely confining potential (e.g. a quartic leading coefficient that goes negative is unbounded from below). Section 7 catches that per variant rather than aborting the whole sweep: it prints the exception plus a cheap, potential-agnostic diagnosis (samples $V(x)$ far from the origin and checks it actually rises there — see `Cv_Coefficient_Sweep._diagnose_variant_failure`), omits that one coefficient value, and still produces the figure from whichever variants did converge (or, if every variant fails, a figure showing just the classical-limit reference), plus a printed summary of which values were omitted.
 
 ## Generalising to a New Potential
 

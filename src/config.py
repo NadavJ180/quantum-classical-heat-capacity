@@ -48,6 +48,16 @@ def my_potential(x, p=POTENTIAL_PARAMS):
 
 SYSTEM_NAME   = "1-D Harmonic Oscillator"
 T_UNITS_LABEL = r"$k_B T \,/\, \hbar\omega$"
+
+# Mathtext shown on Cv_Coefficient_Sweep.py's plot annotation. Plain
+# text (no <<param>> placeholders) is fine when the formula doesn't
+# decompose into one additive term per coefficient, as here (mass and
+# omega multiply inside a single term rather than each owning their
+# own term) -- format_potential_formula() only substitutes placeholder
+# tokens that are actually present, so a template with none is left
+# as-is. Placeholders use <<name>> rather than Python's {name} so they
+# never collide with LaTeX's own braces (e.g. \frac{1}{2} below).
+POTENTIAL_FORMULA = r"$V(x) = \frac{1}{2} m \omega^2 x^2$"
 '''
 
 # a, b, c, d: coefficients of V(x) = a*x^4 + b*x^3 + c*x^2 + d*x.
@@ -59,6 +69,17 @@ def my_potential(x, p=POTENTIAL_PARAMS):
 
 SYSTEM_NAME   = "1-D asymmetric double well"
 T_UNITS_LABEL = r"$k_B T \,/\, \hbar\omega$"
+
+# Mathtext template for the formula shown on Cv_Coefficient_Sweep.py's
+# comparison plot (Section 7): a template with one <<name>> placeholder
+# per POTENTIAL_PARAMS key, one term per coefficient with NO operators
+# between placeholders -- each substituted value supplies its own
+# leading sign/spacing (see Cv_Coefficient_Sweep.format_potential_formula),
+# so terms can be reordered/added freely without touching that function.
+# <<name>> (not Python's {name}) so placeholders never collide with
+# LaTeX's own braces. Must be kept in sync with my_potential by hand,
+# same as SYSTEM_NAME/T_UNITS_LABEL above.
+POTENTIAL_FORMULA = r"$V(x) = <<a>>x^4<<b>>x^3<<c>>x^2<<d>>x$"
 
 # --- DVR base grid: number of energy levels ---
 # Starting guess only -- Quantum_HO_Master.py's auto-tune loop (see
