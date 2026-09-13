@@ -1,5 +1,5 @@
 """
-Quantum_HO_Master_1_5.py
+Quantum_HO_Master.py
 =====================================================================
 WHAT THIS FILE DOES
 ---------------------------------------------------------------------
@@ -9,47 +9,45 @@ closed-form references are used anywhere in this file or in the
 modules it calls. The only ground truth is a second, higher-quality
 DVR computation on a finer/wider grid.
 
-    SECTION 0 -- Configuration            (all parameters here)
-    SECTION 1 -- DVR base computation     (DVR_Algorithm_1_4)
-                 also saves the potential-shape figure (plot_potential.py),
-                 reusing this section's grid/energies -- no separate run needed
-    SECTION 2 -- Numerical reference      (DVR_Reference_Generator_1_0)
-    SECTION 3 -- Energy-level accuracy    (HO_Energy_Level_Error_1_1)
-                 base DVR vs reference DVR, level by level
-    SECTION 4 -- Cv pipeline              (Quantum_Classical_Combined_1_9)
-                 quantum Cv(T) + numerical classical limit on base energies
-    SECTION 5 -- DVR limit analysis       (DVR_Limit_Finder_1_2)
-                 minimum dx and maximum n, both checked vs reference
-    SECTION 6 -- Cv numerical benchmark   (Cv_Numerical_Benchmark_1_0)
-                 quantum Cv and classical limit: base vs reference
+    SECTION 0     -- Configuration              (all parameters, in config.py)
+    SECTION 1 & 4 -- DVR base computation + Cv pipeline, auto-tuned
+                     (DVR_Algorithm, Quantum_Classical_Combined, Cv_AutoTune)
+                     runs in a closed loop: solve the base spectrum, run
+                     the quantum Cv(T) + xi/n classical-limit sweep, then
+                     escalate NUM_STATES / XI_START / MAX_XI_STEPS and
+                     retry if the sweep shows a truncation artifact (see
+                     Cv_AutoTune.py); also saves the potential-shape
+                     figure (plot_potential.py) once the loop settles,
+                     reusing the final grid/energies -- no separate run
+                     needed
+    SECTION 2     -- Numerical reference        (DVR_Reference_Generator)
+    SECTION 3     -- Energy-level accuracy      (error_energylevels)
+                     base DVR vs reference DVR, level by level
+    SECTION 5     -- DVR limit analysis         (DVR_Limit_Finder)
+                     minimum dx and maximum n, both checked vs reference
+    SECTION 6     -- Cv numerical benchmark     (Cv_Numerical_Benchmark)
+                     quantum Cv and classical limit: base vs reference
+    SECTION 7     -- Coefficient sweep          (Cv_Coefficient_Sweep)
+                     quantum Cv(T) across several variants of the base
+                     potential (one named POTENTIAL_PARAMS coefficient
+                     swept) vs. the base run's classical limit
+
+Sections keep their original numbering (matching FINDINGS.md/README.md);
+1 and 4 are a merged, auto-tuned loop rather than two fixed, single-shot
+steps run back-to-back.
 
 GENERALITY
 ---------------------------------------------------------------------
 Every function called here accepts any smooth V(x). To run this
 pipeline on a different potential, change `my_potential` and the
-label strings in Section 0. Nothing else needs to change.
-
-CHANGELOG (v1.4 -> v1.5)
----------------------------------------------------------------------
-- REMOVED all analytical sections: no HO_Analytical_1_0,
-  no HO_Benchmark_1_1, no analytic reference anywhere.
-- Numerical reference (formerly Section 7a) is now Section 2 so
-  it is generated once and shared by Sections 3, 5, and 6.
-- Section 3: energy-level comparison now uses numerical reference.
-- Section 4: Cv pipeline no longer overlays an analytic classical
-  limit curve (cv_analytic=None); the numerical classical limit
-  from the xi/n sweep is the only curve shown.
-- Section 5: DVR limit finder now uses the numerical reference as
-  ground truth (was analytic_energy_levels_HO).
-- Section 6: Cv numerical benchmark (quantum + classical limit)
-  is the sole benchmark; the analytic benchmark is gone.
-- XI_START remains 3.0 (set in v1.4).
+label strings in config.py. Nothing else needs to change.
 =====================================================================
 """
 
 import threading
 import time
 import multiprocessing
+import warnings
 
 from DVR.DVR_Algorithm              import (auto_configure_dvr, 
                                             get_fully_converged_energy_levels, 
@@ -62,6 +60,8 @@ from Quantum_Classical_Combined     import run as run_general_cv_pipeline
 from DVR.DVR_Limit_Finder           import run_dvr_limit_analysis
 from DVR.DVR_Reference_Generator    import generate_reference_energies
 from Cv_Numerical_Benchmark         import run_cv_numerical_benchmark
+from Cv_AutoTune                    import resolve_beta_min, diagnose_escalation
+from Cv_Coefficient_Sweep           import run_coefficient_sweep
 from figures.output_paths           import set_context as set_figure_context
 from figures.plot_potential         import plot_potential_with_spectrum
 from config                         import (MASS, HBAR, my_potential,
@@ -74,7 +74,13 @@ from config                         import (MASS, HBAR, my_potential,
                                             MIN_STABLE_N, LIMIT_TOLERANCE,
                                             INTERACTIVE_REFERENCE_SCALING,
                                             REFERENCE_SPAN_FACTOR,
-                                            REFERENCE_DX_FACTOR, ref_label)
+                                            REFERENCE_DX_FACTOR, ref_label,
+                                            AUTO_ESCALATE, MAX_ESCALATION_ROUNDS,
+                                            NUM_STATES_GROWTH, NUM_STATES_CAP,
+                                            XI_START_GROWTH, MAX_XI_STEPS_GROWTH,
+                                            HOT_STATE_SAFETY,
+                                            ESCALATION_FRACTION_THRESHOLD,
+                                            SCAN_PARAM, SCAN_STEP, SCAN_COUNT)
 
 
 # =====================================================================
@@ -136,29 +142,98 @@ if __name__ == "__main__":
     set_figure_context(SYSTEM_NAME, POTENTIAL_PARAMS)
 
     # =================================================================
-    # SECTION 1 -- DVR base computation
-    # Auto-configure a grid for NUM_STATES levels, run the 3-pass
-    # convergence-checked solve, return the base energy spectrum.
+    # SECTION 1 & 4 -- DVR base computation + Cv pipeline, auto-tuned
+    # The only knob meant to be hand-edited run to run is the
+    # temperature range (config.BETA_MAX, and optionally BETA_MIN).
+    # Everything else that the Cv(T) curve's correctness depends on --
+    # NUM_STATES, XI_START, MAX_XI_STEPS -- is escalated automatically
+    # here: each round solves the DVR + runs the full Cv sweep, then
+    # `diagnose_escalation` (Cv_AutoTune.py) inspects the sweep's own
+    # existing diagnostics for the two known truncation artifacts (see
+    # FINDINGS.md's Troubleshooting table) and grows the relevant
+    # knob(s) before trying again, up to MAX_ESCALATION_ROUNDS.
     # =================================================================
     print("\n" + "="*60)
-    print(f"  SECTION 1 — DVR base computation  ({SYSTEM_NAME})")
+    print(f"  SECTION 1 & 4 — DVR base computation + Cv pipeline  ({SYSTEM_NAME})")
     print("="*60)
 
-    x_min, x_max, n_grid = auto_configure_dvr(
-        my_potential, NUM_STATES, mass=MASS, hbar=HBAR
-    )
+    num_states_cur   = NUM_STATES
+    xi_start_cur     = XI_START
+    max_xi_steps_cur = MAX_XI_STEPS
+    beta_min_resolved = None
 
-    with SimpleTimer("Section 1: DVR 3-pass convergence check"):
-        energies_base = get_fully_converged_energy_levels(
-            potential_func=my_potential,
-            num_levels=NUM_STATES,
-            x_min=x_min, x_max=x_max, num_points=n_grid,
-            mass=MASS, hbar=HBAR,
+    for escalation_round in range(1, MAX_ESCALATION_ROUNDS + 1):
+        print(f"\n  --- Auto-tune round {escalation_round}/{MAX_ESCALATION_ROUNDS} "
+              f"(NUM_STATES={num_states_cur}, XI_START={xi_start_cur:.3g}, "
+              f"MAX_XI_STEPS={max_xi_steps_cur}) ---")
+
+        x_min, x_max, n_grid = auto_configure_dvr(
+            my_potential, num_states_cur, mass=MASS, hbar=HBAR
         )
+
+        with SimpleTimer(f"Round {escalation_round}: DVR 3-pass convergence check"):
+            energies_base = get_fully_converged_energy_levels(
+                potential_func=my_potential,
+                num_levels=num_states_cur,
+                x_min=x_min, x_max=x_max, num_points=n_grid,
+                mass=MASS, hbar=HBAR,
+            )
+
+        if beta_min_resolved is None:
+            beta_min_resolved = resolve_beta_min(BETA_MIN, energies_base)
+
+        with SimpleTimer(f"Round {escalation_round}: Cv T-range sweep"):
+            base_cv_results = run_general_cv_pipeline(
+                energies=energies_base,
+                system_name=SYSTEM_NAME,
+                beta_min=beta_min_resolved, beta_max=BETA_MAX, n_beta=N_BETA,
+                xi_start=xi_start_cur, tol_xi=TOL_XI,
+                min_stable_xi=MIN_STABLE_XI,
+                xi_multiplier=XI_MULT, max_xi_steps=max_xi_steps_cur,
+                tol_cv=TOL_CV, min_stable_n=MIN_STABLE_N,
+                cv_analytic=None,          # no analytic overlay
+                T_units_label=T_UNITS_LABEL,
+            )
+
+        diag = diagnose_escalation(
+            base_cv_results["sweep"], base_cv_results["beta_arr"],
+            num_states_cur, energies_base[-1],
+            hot_state_safety=HOT_STATE_SAFETY,
+            frac_threshold=ESCALATION_FRACTION_THRESHOLD,
+        )
+
+        if not AUTO_ESCALATE or not (diag["need_states"] or diag["need_xi"]):
+            break
+
+        if escalation_round == MAX_ESCALATION_ROUNDS:
+            warnings.warn(
+                f"[Auto-Tune] Reached MAX_ESCALATION_ROUNDS ({MAX_ESCALATION_ROUNDS}) "
+                f"without clearing the truncation diagnostics "
+                f"(finite_n_hot_frac={diag['finite_n_hot_frac']:.2f}, "
+                f"n_marginal_hot_frac={diag['n_marginal_hot_frac']:.2f}, "
+                f"maxsteps_cold_frac={diag['maxsteps_cold_frac']:.2f}). "
+                f"Proceeding with the last attempt's results.",
+                UserWarning,
+            )
+            break
+
+        escalate_msgs = []
+        if diag["need_states"]:
+            num_states_cur = min(int(num_states_cur * NUM_STATES_GROWTH), NUM_STATES_CAP)
+            escalate_msgs.append(f"NUM_STATES -> {num_states_cur}")
+        if diag["need_xi"]:
+            xi_start_cur *= XI_START_GROWTH
+            max_xi_steps_cur = int(max_xi_steps_cur * MAX_XI_STEPS_GROWTH)
+            escalate_msgs.append(f"XI_START -> {xi_start_cur:.3g}, MAX_XI_STEPS -> {max_xi_steps_cur}")
+        print(f"  [Auto-Tune] Escalating: {'; '.join(escalate_msgs)}")
+
+    NUM_STATES   = num_states_cur
+    XI_START     = xi_start_cur
+    MAX_XI_STEPS = max_xi_steps_cur
 
     # Potential-shape figures (V(x) with the computed spectrum overlaid;
     # one full-spectrum overview, one zoomed on the well's own minima).
-    # Reuses the grid/energies just computed above -- no extra DVR solve --
+    # Reuses the final round's grid/energies -- no extra DVR solve --
     # so this never needs to be run separately via plot_potential.py.
     potential_fig_paths = plot_potential_with_spectrum(
         x_min, x_max, my_potential, energies_base, SYSTEM_NAME,
@@ -199,7 +274,7 @@ if __name__ == "__main__":
     # =================================================================
     # SECTION 3 -- Energy-level accuracy: base DVR vs numerical reference
     # Compares the two spectra level-by-level and plots the error.
-    # Uses the generic functions from Energy_Level_Error which
+    # Uses the generic functions from error_energylevels.py, which
     # only ever compare two plain arrays -- no system-specific logic.
     # =================================================================
     print("\n" + "="*60)
@@ -225,31 +300,6 @@ if __name__ == "__main__":
         energy_error,
         system_name=f"{SYSTEM_NAME} — base DVR vs {ref_label}",
     )
-
-    # =================================================================
-    # SECTION 4 -- Cv pipeline
-    # Computes quantum Cv(T) directly from the base energy spectrum,
-    # and finds the numerical classical-limit Cv(T) via the xi/n
-    # convergence sweep. Produces xi-convergence diagnostic,
-    # n-convergence diagnostic, and the combined Cv(T) summary plot.
-    # cv_analytic=None: no analytic overlay; only the numerical curves.
-    # =================================================================
-    print("\n" + "="*60)
-    print("  SECTION 4 — Cv pipeline (base DVR energies)")
-    print("="*60)
-
-    with SimpleTimer("Section 4: Cv T-range sweep"):
-        base_cv_results = run_general_cv_pipeline(
-            energies=energies_base,
-            system_name=SYSTEM_NAME,
-            beta_min=BETA_MIN, beta_max=BETA_MAX, n_beta=N_BETA,
-            xi_start=XI_START, tol_xi=TOL_XI,
-            min_stable_xi=MIN_STABLE_XI,
-            xi_multiplier=XI_MULT, max_xi_steps=MAX_XI_STEPS,
-            tol_cv=TOL_CV, min_stable_n=MIN_STABLE_N,
-            cv_analytic=None,          # no analytic overlay
-            T_units_label=T_UNITS_LABEL,
-        )
 
     # =================================================================
     # SECTION 5 -- DVR limit analysis (numerical reference as truth)
@@ -307,4 +357,27 @@ if __name__ == "__main__":
             xi_multiplier=XI_MULT, max_xi_steps=MAX_XI_STEPS,
             tol_cv=TOL_CV, min_stable_n=MIN_STABLE_N,
             T_units_label=T_UNITS_LABEL,
+        )
+
+    # =================================================================
+    # SECTION 7 -- Coefficient sweep comparison plot
+    # Compares the quantum Cv(T) curves of several variants of the
+    # base potential that differ only in one named POTENTIAL_PARAMS
+    # coefficient (config.SCAN_PARAM), against the single classical-
+    # limit curve already computed above for the base potential. Does
+    # NOT touch the base potential's own pipeline/results above --
+    # this section only ever adds this one new figure.
+    # =================================================================
+    print("\n" + "="*60)
+    print(f"  SECTION 7 — Coefficient sweep ({SCAN_PARAM})")
+    print("="*60)
+
+    with SimpleTimer("Section 7: coefficient sweep"):
+        coefficient_sweep_results = run_coefficient_sweep(
+            base_cv_results=base_cv_results,
+            my_potential=my_potential,
+            base_params=POTENTIAL_PARAMS,
+            scan_param=SCAN_PARAM, scan_step=SCAN_STEP, scan_count=SCAN_COUNT,
+            num_states=NUM_STATES, mass=MASS, hbar=HBAR,
+            system_name=SYSTEM_NAME, T_units_label=T_UNITS_LABEL,
         )

@@ -1,5 +1,5 @@
 """
-DVR_Algorithm_1_5.py
+DVR_Algorithm.py
 =====================================================================
 WHAT THIS FILE DOES
 ---------------------------------------------------------------------
@@ -7,37 +7,16 @@ Core 1-D Discrete Variable Representation (DVR) engine for smooth
 potentials. Builds the Colbert-Miller sinc-DVR Hamiltonian on a
 grid and returns the lowest `num_levels` energy eigenvalues.
 
-CHANGELOG (v1.4 -> v1.5)
----------------------------------------------------------------------
-- REVERTED E_ceiling from the user's temporary hack of
-  `1000.0 * num_levels` back to the physically correct
-  `1.5 * num_levels`. Inflating E_ceiling was wrong for two reasons:
-    1. It pushed classical turning points absurdly far (±710 units
-       for the double well), making the initial grid span far larger
-       than needed.
-    2. It made k_max enormous → dx_target microscopic → n_grid
-       astronomical (tens of thousands of points) with no benefit.
-
-- ADDED adaptive span expansion loop to `auto_configure_dvr`.
-  After the initial grid estimate, the function now iteratively
-  expands the span (by `span_growth_factor` per step, default 1.3×)
-  and checks convergence by comparing eigenvalues on the current
-  grid against the same computation on a wider grid. This correctly
-  handles potentials (double well, Morse, quartic) whose wavefunction
-  tails extend much further than the HO-calibrated padding heuristic
-  would predict. Key design decisions:
-    - `dx_target` is FIXED before the expansion loop so that grid
-      resolution and span are decoupled (widening the grid adds
-      more points, not coarser ones).
-    - 1 DVR solve per expansion step (not 2): the "wider" result
-      becomes the "current" for the next step, recycling work.
-    - If the loop reaches `max_span_iters` without converging, a
-      warning is issued and the widest grid found is returned;
-      `get_fully_converged_energy_levels` then performs a final
-      validation pass as a safety net.
-    - Three new optional parameters: `span_tol`, `span_growth_factor`,
-      `max_span_iters` — all have sensible defaults and do not
-      require changes to any calling code.
+`auto_configure_dvr` picks the grid automatically for a given
+potential and level count (initial turning-point/Nyquist estimate,
+then an adaptive span-expansion loop that widens the grid until
+eigenvalues stop changing -- see its own docstring for the two-stage
+method). `colbert_miller_dvr_1d` is the actual solver: it diagonalizes
+the Hamiltonian on a fixed, already-chosen grid.
+`get_fully_converged_energy_levels` wraps the solver in a 3-pass
+convergence check (resolution + boundary span) and raises if either
+check fails, so a caller never silently receives an under-converged
+spectrum.
 =====================================================================
 """
 

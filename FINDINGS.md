@@ -57,22 +57,27 @@ set below by the level spacing needing to look continuous, and above by the top 
 | **$C_v(T)$ summary** (quantum + classical limit + $\xi_{\text{conv}}(T)$/$n_{\text{conv}}(T)$) | Quantum curve rises smoothly from ~0 to the classical plateau; the secondary axis shows which temperatures were hardest to converge. |
 | **DVR resolution/level-count limit plots** | Long machine-precision floor, then an abrupt cliff once $\Delta x$ (or requested $n$) crosses the solver's breakdown point. |
 | **Cv benchmark plots** (base vs. reference, or numerical vs. analytic) | Flat, featureless error curve well below the convergence tolerance across the full temperature range; structure in the error is diagnostic (see Troubleshooting below). |
+| **Coefficient sweep** (`cv/cv_coefficient_sweep.png`, Section 7) | One quantum $C_v(T)$ curve per swept coefficient value against the base run's shared classical-limit curve. All curves should converge onto the classical-limit curve at high $T$; a bigger low/mid-$T$ overshoot before settling indicates a bigger (numerical) Schottky-anomaly-like bump for that coefficient value. Two curves exactly coincide (one invisible) when their coefficient values give mirror-image potentials with identical spectra — see `README.md`'s "Coefficient Sweep" section. |
 
 ## Key Parameters (`src/config.py`)
 
 | Parameter | Effect |
 |-----------|--------|
-| `NUM_STATES` | More levels → higher computational cost, but wider temperature coverage and a higher trustworthy-$n$ ceiling in the DVR limit analysis. |
-| `BETA_MIN` / `BETA_MAX` | Temperature sweep window. Too cold a `BETA_MAX` shrinks the range where the classical limit converges. |
-| `XI_START` | Higher start → classical limit locatable at colder temperatures; `3.0` is a good default. |
-| `TOL_XI` / `TOL_CV` | Tighter tolerances → more accurate classical limit, at the cost of a slower sweep and more scan steps. |
+| `NUM_STATES` | Round-0 starting guess only as of the auto-tune loop (see below) — more levels → higher computational cost, but wider temperature coverage and a higher trustworthy-$n$ ceiling in the DVR limit analysis. |
+| `BETA_MIN` / `BETA_MAX` | Temperature sweep window. `BETA_MIN = None` (default) auto-derives the hot end from $T_{\max}=10\Delta E/k_B$ (see "Auto-Tuning" below); set a float to hand-pick it instead. Too cold a `BETA_MAX` shrinks the range where the classical limit converges. |
+| `XI_START` | Round-0 starting guess only — higher start → classical limit locatable at colder temperatures; `3.0` is a good default and is escalated automatically if the cold end still fails to converge. |
+| `TOL_XI` / `TOL_CV` | Tighter tolerances → more accurate classical limit, at the cost of a slower sweep and more scan steps. Not touched by the auto-tune loop. |
 | `LIMIT_TOLERANCE` | Pass/fail threshold used by the DVR resolution/level-count limit searches. |
 | `REFERENCE_SPAN_FACTOR` / `REFERENCE_DX_FACTOR` | How much wider/finer the numerical reference grid is than the base grid; `2.0`/`2.0` (span doubled, spacing halved) is the default. |
+| `AUTO_ESCALATE`, `MAX_ESCALATION_ROUNDS`, `NUM_STATES_GROWTH`, `NUM_STATES_CAP`, `XI_START_GROWTH`, `MAX_XI_STEPS_GROWTH`, `HOT_STATE_SAFETY`, `ESCALATION_FRACTION_THRESHOLD` | Control the `Cv_AutoTune.py` escalation loop (see "Auto-Tuning" in `README.md`). Meant to be touched rarely, if ever. |
+| `SCAN_PARAM`, `SCAN_STEP`, `SCAN_COUNT` | Which `POTENTIAL_PARAMS` coefficient the Section 7 comparison plot sweeps, its step size, and how many extra variants per side of the base value (see "Coefficient Sweep" in `README.md`). |
 
 ## Troubleshooting
 
+As of the `Cv_AutoTune.py` escalation loop, the two truncation artifacts below are detected and corrected automatically at every run (see "Auto-Tuning" in `README.md`) — `NUM_STATES` and `XI_START`/`MAX_XI_STEPS` are grown and the DVR solve + sweep retried, up to `MAX_ESCALATION_ROUNDS`. The manual remedies still apply if you disable auto-escalation (`AUTO_ESCALATE = False`), if the loop still hasn't cleared the diagnostics by its last round (it prints a `UserWarning` and proceeds with the last attempt), or for the Section 6 reference-grid benchmark and Section 7 coefficient-sweep variants, which reuse the base run's final (possibly already-escalated) settings rather than escalating independently.
+
 - **Quantum $C_v$ cuts off abruptly:** extend the temperature sweep further in the relevant direction (smaller $\beta$ for higher $T$, larger $\beta$ for lower $T$) — you likely haven't reached the plateau yet.
-- **Classical limit drops at low $T$:** increase `XI_START`.
-- **Classical limit drops at high $T$ / Cv benchmark error rises at high $T$:** the partition sum may be truncating thermally-accessible levels — increase `NUM_STATES`.
+- **Classical limit drops at low $T$:** increase `XI_START` (auto-escalated; the loop checks for this at the cold half of the sweep and grows `XI_START`/`MAX_XI_STEPS` together).
+- **Classical limit drops at high $T$ / Cv benchmark error rises at high $T$:** the partition sum may be truncating thermally-accessible levels — increase `NUM_STATES` (auto-escalated; the loop checks for this at the hot half of the sweep).
 - **Cv benchmark error rises at low $T$:** the lowest eigenvalues are inaccurate — check the base grid's resolution or boundary span.
 - **Relative-error metrics blowing up at very low $T$:** both the numerator and denominator are underflowing toward zero there; check the *absolute* error instead, which stays meaningful throughout.

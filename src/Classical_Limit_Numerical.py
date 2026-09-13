@@ -1,5 +1,5 @@
 """
-Classical_Limit_Numerical_1_0.py
+Classical_Limit_Numerical.py
 =====================================================================
 WHAT THIS FILE DOES
 ---------------------------------------------------------------------
@@ -22,17 +22,11 @@ plateau isn't an artifact of having too few states available.
 This file contains NO plotting and NO knowledge of any particular
 potential -- it is purely the numerical engine. Plotting and
 system-specific wiring live in the files that import this one
-(Quantum_Classical_Combined_1_9.py, HO_Benchmark_1_0.py, etc.).
-
-CHANGELOG (NEW FILE, v1.0)
----------------------------------------------------------------------
-- Extracted from Quantum_Classical_Combined_1_8_Opti.py and given its
-  own file so the classical-limit-finding numerics can be reused by
-  any system/driver without dragging along plotting or DVR-specific
-  code. No change to the underlying math versus v1.8 -- this is a
-  pure code-organization split.
-- Added full module/function-level docstrings per project
-  documentation conventions.
+(Quantum_Classical_Combined.py, Cv_Numerical_Benchmark.py,
+HO_Benchmark.py, etc.). `sweep_temperature_range`'s per-temperature
+trace (xi_results, n_conv, ...) also doubles as the diagnostic data
+Cv_AutoTune.diagnose_escalation inspects to decide whether NUM_STATES
+or XI_START/MAX_XI_STEPS need to grow for the next attempt.
 =====================================================================
 """
 

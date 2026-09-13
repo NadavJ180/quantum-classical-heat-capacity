@@ -1,12 +1,12 @@
 """
-Cv_Numerical_Benchmark_1_2.py
+Cv_Numerical_Benchmark.py
 =====================================================================
 WHAT THIS FILE DOES
 ---------------------------------------------------------------------
 Benchmarks the quantum Cv(T) curve and the numerical classical-limit
 Cv(T) curve from the BASE DVR pipeline against the same quantities
 recomputed on a HIGH-PRECISION NUMERICAL REFERENCE grid (generated
-by DVR_Reference_Generator_1_0.py). Produces two two-panel figures:
+by DVR_Reference_Generator.py). Produces two two-panel figures:
 
     Figure 1 -- Quantum Cv(T):
         top:    base-DVR Cv(T) vs reference Cv(T) on the same axes
@@ -34,23 +34,6 @@ CLASSICAL LIMIT Cv (Figure 2 bottom) -- RELATIVE ERROR:
     in this region, so relative error is well-defined and is the
     better metric: it normalises the comparison to the scale of the
     quantity being measured.
-
-CHANGELOG (v1.1 -> v1.2)
----------------------------------------------------------------------
-- QUANTUM Cv ERROR PANEL reverted from relative to ABSOLUTE error.
-  Relative error diverges as Cv → 0 at low T (dividing ~0 by ~0),
-  producing spurious infinite errors that obscure the actual accuracy
-  of the DVR calculation. Absolute error is well-defined everywhere.
-
-- CLASSICAL LIMIT ERROR PANEL keeps relative error from v1.1. The
-  classical limit is always reported near k_B ≠ 0 (only where the
-  xi-scan converged), so relative error is meaningful there.
-
-- `print_cv_benchmark_summary` now prints absolute error for quantum
-  Cv and relative error for classical limit, matching the plots.
-
-- Module docstring updated to explain why each panel uses a
-  different metric.
 =====================================================================
 """
 

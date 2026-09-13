@@ -8,24 +8,30 @@ This is exactly "Section 0" of Quantum_HO_Master.py, pulled out into
 its own module so that OTHER scripts (the figures/ tools, tests, a
 notebook, ...) can import the potential / bounds / parameters WITHOUT
 importing Quantum_HO_Master.py itself -- which would otherwise run
-the full six-section pipeline (DVR solve, reference generation, Cv
-sweep, ...) as a side effect of the import.
+the full seven-section pipeline (DVR solve, reference generation, Cv
+sweep, coefficient sweep, ...) as a side effect of the import.
 
 To switch systems: edit `my_potential`, `SYSTEM_NAME`, and
-`T_UNITS_LABEL` below (swap which block is commented out), exactly as
-before. Nothing else in the repository needs to change.
+`T_UNITS_LABEL` below (swap which block is commented out). The only
+other values that normally need adjusting for a new system are
+`NUM_STATES` and `BETA_MAX` (a starting guess and the cold end of the
+sweep, respectively) -- see the "Auto-tune escalation" and
+"Temperature sweep" sections below for why the rest doesn't.
 
 POTENTIAL_PARAMS is the single source of truth for this run's named
 potential parameters: `my_potential` reads its coefficients from it
 (so there is exactly one place to change a value -- no separate label
 that can drift out of sync with the actual formula), and it is also
 what figures/output_paths.py uses to name each run's figure folder
-(figures/<system>/<params>/<category>/...). This is what makes a
-future bulk scan -- e.g. over a range of the double well's `b` --
-land every parameter combination in its own, unambiguous folder: each
-iteration just sets POTENTIAL_PARAMS (or calls
-figures.output_paths.set_context directly) before re-running the
-pipeline.
+(figures/<system>/<params>/<category>/...). SCAN_PARAM/SCAN_STEP/
+SCAN_COUNT below drive one built-in use of this: Cv_Coefficient_Sweep.py
+sweeps a single named coefficient and plots every variant's quantum
+Cv(T) in one shared figure, without giving each variant its own
+figure folder. A bulk scan that instead needs each parameter
+combination's own full set of diagnostics (all seven sections, in
+its own folder) is a different, heavier pattern: loop over
+POTENTIAL_PARAMS values, calling figures.output_paths.set_context(...)
+again at the top of each iteration before re-running the pipeline.
 =====================================================================
 """
 
@@ -55,12 +61,45 @@ SYSTEM_NAME   = "1-D asymmetric double well"
 T_UNITS_LABEL = r"$k_B T \,/\, \hbar\omega$"
 
 # --- DVR base grid: number of energy levels ---
-# The n-convergence diagnostic (Section 4) will confirm the exact
-# number needed; 500 gives comfortable headroom for this system.
+# Starting guess only -- Quantum_HO_Master.py's auto-tune loop (see
+# Cv_AutoTune.py) will grow this if the hot end of the sweep shows
+# signs of thermal-occupation truncation (the "numerical Schottky
+# anomaly"). 500 gives comfortable headroom for this system already.
 NUM_STATES = 500
 
 # --- Temperature sweep ---
-BETA_MIN, BETA_MAX, N_BETA = 0.01, 50.0, 1000
+# BETA_MIN = None means "auto": Quantum_HO_Master.py derives it from
+# T_max = 10 * (E1 - E0) / k_B, the practical "T -> infinity" checkpoint
+# by which the classical limit should already be reached. Set it to a
+# float instead to hand-pick the hot end (e.g. to zoom into a specific
+# temperature window) -- BETA_MAX always stays a plain, user-set float,
+# since that is the knob actually meant to be changed run to run.
+BETA_MIN, BETA_MAX, N_BETA = None, 50.0, 1000
+
+# --- Auto-tune escalation (Cv_AutoTune.py) ---
+# Starting guesses for NUM_STATES/XI_START/MAX_XI_STEPS above are
+# escalated automatically if the sweep shows a truncation artifact at
+# the hot end (not enough levels) or a ran-out-of-budget xi-scan at the
+# cold end (not enough xi steps) -- see FINDINGS.md's Troubleshooting
+# table for the physical rationale. These knobs control that loop and
+# are meant to be touched rarely, if ever.
+AUTO_ESCALATE               = True
+MAX_ESCALATION_ROUNDS       = 4
+NUM_STATES_GROWTH           = 1.6
+NUM_STATES_CAP              = 4000
+XI_START_GROWTH             = 2.0
+MAX_XI_STEPS_GROWTH         = 1.5
+HOT_STATE_SAFETY            = 20.0   # target E_max / (k_B * T_hot)
+ESCALATION_FRACTION_THRESHOLD = 0.05  # fraction of a sweep half allowed to fail before escalating
+
+# --- Coefficient sweep (Cv_Coefficient_Sweep.py) ---
+# Which POTENTIAL_PARAMS key to vary, the spacing between consecutive
+# values, and how many EXTRA potentials to add on each side of the
+# value already set above (so the base value/potential is always one
+# of the plotted curves). Total curves plotted = 2*SCAN_COUNT + 1.
+SCAN_PARAM = "a"
+SCAN_STEP  = 0.5
+SCAN_COUNT = 2
 
 # --- xi / n convergence parameters ---
 # XI_START = 3.0: first probe is already at effective T/9, allowing

@@ -20,6 +20,11 @@ Along the way the codebase was reorganized from a monolithic script into the cur
 
 **Current state:** the HO benchmark (Sections 1–6 of the pipeline) is fully validated, agreeing with the exact analytic solution to machine precision. The same pipeline, unmodified beyond the potential definition, is now running on a quartic double well — the first anharmonic system, and the first candidate for a genuine physical Schottky anomaly (see `docs/summaries/IEEE_Summary.tex`).
 
+Two further additions, both aimed at exploring the double well's Schottky-anomaly-like behavior without hand-tuning numerics on every run:
+
+- **Auto-tuning (`Cv_AutoTune.py`).** Manually changing the temperature range (`BETA_MIN`/`BETA_MAX`) could silently produce two known artifacts, already documented as manual remedies in `FINDINGS.md`'s Troubleshooting table: a numerical-Schottky-like truncation collapse in quantum $C_v$ at high $T$ (too few levels for that temperature) and a spurious drop in the classical limit at low $T$ (the $\xi$-scan running out of budget before the plateau). Sections 1 and 4 were merged into one closed-loop escalation: after each DVR solve + Cv sweep, the sweep's own existing diagnostics (finite-$N$ collapse, $n$-convergence margin, $\xi$-scan `max_steps` exhaustion) are inspected on the matching half of the temperature range, and `NUM_STATES` / `XI_START`+`MAX_XI_STEPS` are grown automatically before retrying — bounded by `MAX_ESCALATION_ROUNDS`. `BETA_MIN` also gained an "auto" mode (`None`), derived from `T_max = 10\Delta E/k_B` (the fundamental gap), so temperature range is the only parameter that needs hand-editing run to run.
+- **Coefficient sweep (`Cv_Coefficient_Sweep.py`, Section 7).** To study how one potential coefficient (e.g. the double well's cubic `b`) affects the size of the Schottky-anomaly-like bump, a new comparison plot overlays several variants' quantum $C_v(T)$ curves — swept via `SCAN_PARAM`/`SCAN_STEP`/`SCAN_COUNT`, centered on and always including the base value — against the single classical-limit curve already computed for the base potential, without redoing any $\xi$/$n$-convergence search per variant.
+
 ## Version History
 
 Pre-reorganization filenames carried explicit version suffixes (e.g. `DVR_Algorithm_1_4.py`); current files under `src/` no longer do (see [`README.md`](README.md) for the current structure). This table is kept as a historical record of the module-level changes that shaped the current design.
@@ -38,3 +43,5 @@ Pre-reorganization filenames carried explicit version suffixes (e.g. `DVR_Algori
 | `Cv_Numerical_Benchmark` | 1.0 | New: base vs. reference Cv comparison (quantum + classical) |
 | `HO_Energy_Level_Error` | 1.1 | Docstring clarified — function is fully generic |
 | `Quantum_HO_Master` | 1.5 | Analytical sections removed; fully numerical pipeline (numerical reference is now the sole ground truth for Sections 3, 5, 6) |
+| `Cv_AutoTune` | 1.0 | New: `BETA_MIN` auto-fill from $T_{\max}=10\Delta E/k_B$, and escalation diagnostics for the `NUM_STATES`/`XI_START` closed loop in `Quantum_HO_Master`'s merged Sections 1 & 4 |
+| `Cv_Coefficient_Sweep` | 1.0 | New: Section 7 coefficient-sweep comparison plot (quantum $C_v(T)$ per variant vs. the base run's reused classical limit) |
