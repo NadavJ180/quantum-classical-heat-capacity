@@ -86,7 +86,7 @@ POTENTIAL_FORMULA = r"$V(x) = <<a>>x^4<<b>>x^3<<c>>x^2<<d>>x$"
 # Cv_AutoTune.py) will grow this if the hot end of the sweep shows
 # signs of thermal-occupation truncation (the "numerical Schottky
 # anomaly"). 500 gives comfortable headroom for this system already.
-NUM_STATES = 500
+NUM_STATES = 700
 
 # --- Temperature sweep ---
 # BETA_MIN = None means "auto": Quantum_HO_Master.py derives it from
@@ -118,9 +118,9 @@ ESCALATION_FRACTION_THRESHOLD = 0.05  # fraction of a sweep half allowed to fail
 # values, and how many EXTRA potentials to add on each side of the
 # value already set above (so the base value/potential is always one
 # of the plotted curves). Total curves plotted = 2*SCAN_COUNT + 1.
-SCAN_PARAM = "a"
-SCAN_STEP  = 0.5
-SCAN_COUNT = 2
+SCAN_PARAM = "b"
+SCAN_STEP  = 0.2
+SCAN_COUNT = 4
 
 # --- xi / n convergence parameters ---
 # XI_START = 3.0: first probe is already at effective T/9, allowing

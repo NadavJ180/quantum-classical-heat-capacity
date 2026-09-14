@@ -253,7 +253,17 @@ def run(energies, system_name,
     system_name : str
         Human-readable system name, used in plot titles/console output.
     beta_min, beta_max, n_beta : float, float, int, optional
-        Inverse-temperature sweep range and point count.
+        Inverse-temperature sweep range and point count. `beta_arr` is
+        LOG-spaced (`np.geomspace`), not linear: every plot in this
+        project displays T on a log axis, and beta_min/beta_max
+        typically span more than a decade, so linear spacing in beta
+        leaves the high-T tail (small beta) drastically under-sampled
+        relative to how it's actually viewed -- e.g. for a typical
+        beta_min~0.075/beta_max=50/n_beta=1000, linear spacing puts
+        just ~3 points across the T=5-13 decade (visibly polygonal,
+        "connected straight lines" instead of a smooth curve, most
+        noticeable wherever a curve's transition happens to land in
+        that stretch), where log spacing puts ~150.
     xi_start, tol_xi, min_stable_xi, xi_multiplier, max_xi_steps :
         Passed through to `converge_xi` at every temperature.
     tol_cv, min_stable_n :
@@ -274,13 +284,13 @@ def run(energies, system_name,
             Full output of `sweep_temperature_range` (includes
             per-temperature convergence traces for further inspection).
     """
-    beta_arr = np.linspace(beta_min, beta_max, n_beta)
+    beta_arr = np.geomspace(beta_min, beta_max, n_beta)
     T_arr = 1.0 / beta_arr
 
     rule = "\u2550" * 60
     print(f"\n{rule}\n  {system_name}\n{rule}")
     print(f"  {len(energies)} levels, E_min={energies[0]:.3g}, E_max={energies[-1]:.3g}")
-    print(f"  \u03b2: {beta_min} \u2192 {beta_max}  ({n_beta} points)")
+    print(f"  \u03b2: {beta_min} \u2192 {beta_max}  ({n_beta} log-spaced points)")
 
     sweep = sweep_temperature_range(
         energies, beta_arr,
