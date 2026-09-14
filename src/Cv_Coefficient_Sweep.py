@@ -561,7 +561,7 @@ def _render_potential_panel(ax, record, levels_to_draw, color=None, min_levels_s
 # =====================================================================
 # Potential comparison: side-by-side panels (small variant counts)
 # =====================================================================
-def _plot_potentials_side_by_side(records, scan_param, system_name, levels_to_draw):
+def _plot_potentials_side_by_side(records, scan_param, system_name, levels_to_draw, formula_text=None):
     n = len(records)
     fig, axes = plt.subplots(1, n, figsize=(4.3 * n, 5), squeeze=False)
     axes = axes[0]
@@ -571,16 +571,19 @@ def _plot_potentials_side_by_side(records, scan_param, system_name, levels_to_dr
         ax.set_title(f"{scan_param} = {record['value']:g}\n({n_shown} levels shown)",
                      fontsize=10, fontweight="bold", color=color)
     axes[0].set_ylabel("Energy", fontsize=10)
-    fig.suptitle(f"{system_name} — potential & spectrum vs {scan_param}",
-                 fontsize=13, fontweight="bold")
-    plt.tight_layout(rect=[0, 0, 1, 0.90])
+    title_lines = [f"{system_name} — potential & spectrum vs {scan_param}"]
+    if formula_text:
+        title_lines.append(formula_text)
+    fig.suptitle("\n".join(title_lines), fontsize=13, fontweight="bold")
+    top = 0.90 if formula_text is None else 0.84
+    plt.tight_layout(rect=[0, 0, 1, top])
     return save_figure(fig, "coefficient_sweep", "potential_comparison")
 
 
 # =====================================================================
 # Potential comparison: single overlay (medium variant counts)
 # =====================================================================
-def _plot_potentials_overlay(records, scan_param, system_name):
+def _plot_potentials_overlay(records, scan_param, system_name, formula_text=None):
     fig, ax = plt.subplots(figsize=(9, 6))
     colors = _variant_colors(len(records))
 
@@ -608,28 +611,34 @@ def _plot_potentials_overlay(records, scan_param, system_name):
     ax.set_ylabel("Energy", fontsize=11)
     ax.legend(fontsize=9)
     ax.grid(alpha=0.3, linestyle="--")
-    fig.suptitle(
-        f"{system_name} — potential overlay vs {scan_param}\n"
-        f"(individual levels omitted -- too many variants for side-by-side panels)",
-        fontsize=13, fontweight="bold",
-    )
-    plt.tight_layout(rect=[0, 0, 1, 0.90])
+    title_lines = [f"{system_name} — potential overlay vs {scan_param}"]
+    if formula_text:
+        title_lines.append(formula_text)
+    title_lines.append("(individual levels omitted -- too many variants for side-by-side panels)")
+    fig.suptitle("\n".join(title_lines), fontsize=13, fontweight="bold")
+    top = 0.90 if formula_text is None else 0.84
+    plt.tight_layout(rect=[0, 0, 1, top])
     return save_figure(fig, "coefficient_sweep", "potential_comparison")
 
 
 # =====================================================================
 # Potential comparison: one figure per variant (large variant counts)
 # =====================================================================
-def _plot_potentials_separate(records, scan_param, system_name, levels_to_draw):
+def _plot_potentials_separate(records, scan_param, system_name, levels_to_draw, formula_template=None):
     paths = []
     for record in records:
         fig, ax = plt.subplots(figsize=(6.5, 5.5))
         n_shown = _render_potential_panel(ax, record, levels_to_draw)
         ax.set_ylabel("Energy", fontsize=11)
-        ax.set_title(
-            f"{system_name} — {scan_param} = {record['value']:g}\n({n_shown} levels shown)",
-            fontsize=12, fontweight="bold",
-        )
+        # Fully numeric (not symbolic) here -- each figure is exactly one
+        # concrete potential, so scan_param=None substitutes every
+        # coefficient (including the swept one) with this record's own value.
+        formula_text = format_potential_formula(formula_template, record["params"], None)
+        title_lines = [f"{system_name} — {scan_param} = {record['value']:g}"]
+        if formula_text:
+            title_lines.append(formula_text)
+        title_lines.append(f"({n_shown} levels shown)")
+        ax.set_title("\n".join(title_lines), fontsize=12, fontweight="bold")
         plt.tight_layout()
         value_slug = f"{record['value']:g}".replace("-", "m").replace(".", "p")
         paths.append(save_figure(fig, "coefficient_sweep", f"potential_{scan_param}_{value_slug}"))
@@ -639,7 +648,8 @@ def _plot_potentials_separate(records, scan_param, system_name, levels_to_draw):
 # =====================================================================
 # Potential comparison: dispatcher
 # =====================================================================
-def plot_variant_potentials(records, scan_param, system_name, levels_to_draw=25):
+def plot_variant_potentials(records, scan_param, system_name, formula_template=None,
+                             base_params=None, levels_to_draw=25):
     """
     Compare the swept potentials and their low-lying spectra -- this
     is what lets a Cv anomaly's size be correlated with the actual
@@ -657,13 +667,29 @@ def plot_variant_potentials(records, scan_param, system_name, levels_to_draw=25)
         variants > OVERLAY_MAX -> one figure per variant (most figures,
             least clutter per figure).
 
+    Every layout's title reflects WHICHEVER coefficient is actually
+    being swept -- there is nothing hard-coded to any one coefficient
+    name (`scan_param` drives every label, filename, and formula
+    substitution) -- so switching `config.SCAN_PARAM` to a different
+    key needs no changes here. The side-by-side/overlay titles show
+    the formula with the swept coefficient symbolic (matching the Cv
+    plot); the separate-figure layout shows each one fully numeric,
+    since each of those figures is exactly one concrete potential.
+
     Parameters
     ----------
     records : list of dict
         One entry per CONVERGED variant (see `run_coefficient_sweep`),
-        each with "value", "potential_func", "energies", "x_min", "x_max".
+        each with "value", "params", "potential_func", "energies",
+        "x_min", "x_max".
     scan_param : str
     system_name : str
+    formula_template : str or None, optional
+        config.POTENTIAL_FORMULA -- see `format_potential_formula`.
+        None omits the formula annotation from every layout.
+    base_params : dict or None, optional
+        config.POTENTIAL_PARAMS, needed (together with `formula_template`)
+        for the side-by-side/overlay layouts' symbolic formula line.
     levels_to_draw : int, optional
         How many of each variant's lowest levels to overlay in the
         side-by-side / separate-figure layouts (default 25 -- enough
@@ -679,10 +705,12 @@ def plot_variant_potentials(records, scan_param, system_name, levels_to_draw=25)
     if n == 0:
         return None
     if n <= SIDE_BY_SIDE_MAX:
-        return _plot_potentials_side_by_side(records, scan_param, system_name, levels_to_draw)
+        formula_text = format_potential_formula(formula_template, base_params, scan_param) if base_params else None
+        return _plot_potentials_side_by_side(records, scan_param, system_name, levels_to_draw, formula_text)
     if n <= OVERLAY_MAX:
-        return _plot_potentials_overlay(records, scan_param, system_name)
-    return _plot_potentials_separate(records, scan_param, system_name, levels_to_draw)
+        formula_text = format_potential_formula(formula_template, base_params, scan_param) if base_params else None
+        return _plot_potentials_overlay(records, scan_param, system_name, formula_text)
+    return _plot_potentials_separate(records, scan_param, system_name, levels_to_draw, formula_template)
 
 
 # =====================================================================
@@ -802,7 +830,9 @@ def run_coefficient_sweep(base_cv_results, my_potential, base_params,
         T_arr, base_cv_results["cv_classical"], ok_values, ok_curves,
         scan_param, system_name, formula_text, set(marginal_values), T_units_label,
     )
-    potential_figure_paths = plot_variant_potentials(ok_records, scan_param, system_name)
+    potential_figure_paths = plot_variant_potentials(
+        ok_records, scan_param, system_name, formula_template, base_params,
+    )
 
     if failed:
         print(f"  ⚠ {len(failed)}/{len(variant_params)} coefficient values did not converge "

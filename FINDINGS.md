@@ -40,6 +40,22 @@ set below by the level spacing needing to look continuous, and above by the top 
 
 **On the HO and equipartition:** the HO's classical $C_v$ is exactly $k_B$ at *every* temperature, not just asymptotically at high $T$ — so the numerically found plateau matches the equipartition prediction across the whole sweep. That exact temperature-independence is a special feature of the HO (a purely quadratic potential); it isn't guaranteed to hold as cleanly for an anharmonic potential like the double well.
 
+### Coefficient-Sweep Validity: Is Reusing `NUM_STATES` Across Variants Legitimate?
+
+The coefficient sweep (`Cv_Coefficient_Sweep.py`, Section 7) evaluates the literal quantum $C_v(T) = k_B\beta^2\,\mathrm{Var}(E)$ directly from each variant's own truncated spectrum — no $\xi$-scan, no classical-limit search. That formula is *exact* for a truncated spectrum of `NUM_STATES` levels at any temperature where the omitted, higher levels would have carried negligible Boltzmann weight anyway, i.e. wherever
+
+$$E_{\max} - E_0 \;\gg\; k_B T_{\text{hot}}, \qquad T_{\text{hot}} = 1/\beta_{\min},$$
+
+the same criterion `Cv_AutoTune.py` already enforces for the base run (`HOT_STATE_SAFETY`, target ratio $\approx 20$). `NUM_STATES` is tuned by the base run's own auto-tune loop to satisfy this for the **base** potential's spectrum only — reusing that same level *count* for a different coefficient value is not automatically safe, because the level-spacing scaling itself depends on the coefficient being varied.
+
+Concretely, WKB quantization of a well dominated by a quartic term $V\sim a\,x^4$ gives
+
+$$\oint p\,dx = \left(n+\tfrac12\right)\pi\hbar, \qquad p=\sqrt{2m(E-ax^4)} \;\Rightarrow\; E_n \;\sim\; a^{1/3}\,n^{4/3}.$$
+
+So for a **fixed** level count $n=$`NUM_STATES`, $E_n$ grows with $a^{1/3}$: sweeping the leading coefficient **upward** only ever makes the base run's `NUM_STATES` choice *more* conservative ($E_{\max}$ grows). Sweeping it **downward** — toward zero, or negative, exactly the direction that produces a non-confining potential (see "Troubleshooting" and the coefficient-sweep resilience handling) — *shrinks* $E_{\max}$ for the same level count, and could in principle silently reproduce the same truncation artifact (a numerical-Schottky-like collapse at the hot end) that `Cv_AutoTune.py` exists to prevent for the base run, without anything flagging it.
+
+**The fix, not just the diagnosis:** `Cv_Coefficient_Sweep.solve_variant_with_hot_coverage` checks the exact same $E_{\max}/k_BT_{\text{hot}}$ criterion for every variant's own spectrum after solving it, and if it fails, escalates that *one* variant's own `NUM_STATES` (reusing `NUM_STATES_GROWTH`/`NUM_STATES_CAP`/`MAX_ESCALATION_ROUNDS` — the same knobs the base run's own escalation loop uses) and re-solves, up to the same bounds. A variant that still can't clear the margin after escalating is kept rather than dropped — the low/mid-$T$ region where a Schottky-anomaly-like bump actually appears is governed by the low-lying levels and the well's own shape, not by hot-end truncation, so it stays informative — but it is flagged, both with a console warning and a `*` after its value in the Cv plot's legend, rather than silently trusted at every temperature.
+
 ## Findings So Far
 
 - **HO validation:** base-grid energy levels agree with the numerical reference to within machine precision across the full computed spectrum. The resulting quantum and classical-limit $C_v(T)$ curves agree with the exact analytic (Einstein-oscillator) formula to machine precision as well — evidence that the pipeline's internal, closed-form-free validation methodology (base grid vs. numerical reference) actually tracks the true answer, not just a shared artifact of the method.
