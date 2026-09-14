@@ -23,12 +23,16 @@ the repo-root figures/ folder organized as runs accumulate:
              (includes the potential-shape plot from plot_potential.py --
              it's an energy-level diagnostic too, just not a computed-
              error one), convergence, cv (the quantum/classical Cv
-             summary, the base-vs-reference/analytic benchmarks, and
-             the coefficient-sweep comparison plot from
-             Cv_Coefficient_Sweep.py -- kept in one folder rather than
-             splitting by how the comparison curve was obtained), or
-             dvr_limits. Matches the categories already named in
-             FINDINGS.md's "Reading the Diagnostic Plots" table.
+             summary and the base-vs-reference/analytic benchmarks --
+             kept in one folder rather than splitting by how the
+             comparison curve was obtained), dvr_limits, or
+             coefficient_sweep (Cv_Coefficient_Sweep.py's own dedicated
+             folder for BOTH its figures -- the Cv comparison plot and
+             the potential/spectrum comparison plot(s) -- deliberately
+             separate from cv/energy_levels since these compare several
+             potentials against each other, not diagnose the base run).
+             Matches the categories already named in FINDINGS.md's
+             "Reading the Diagnostic Plots" table.
 
 Every path component (system, params, category, and every figure
 filename) is built only from [A-Za-z0-9_-] -- no spaces, dots, commas,

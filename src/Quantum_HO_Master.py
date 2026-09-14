@@ -360,18 +360,26 @@ if __name__ == "__main__":
         )
 
     # =================================================================
-    # SECTION 7 -- Coefficient sweep comparison plot
-    # Compares the quantum Cv(T) curves of several variants of the
-    # base potential that differ only in one named POTENTIAL_PARAMS
-    # coefficient (config.SCAN_PARAM), against the single classical-
-    # limit curve already computed above for the base potential, with
-    # the potential's formula (config.POTENTIAL_FORMULA) annotated on
-    # the plot. A variant whose DVR solve fails to converge (e.g. a
-    # coefficient value that makes the potential non-confining) is
-    # skipped with a diagnostic rather than aborting the whole sweep --
-    # see Cv_Coefficient_Sweep.run_coefficient_sweep. Does NOT touch
-    # the base potential's own pipeline/results above -- this section
-    # only ever adds this one new figure.
+    # SECTION 7 -- Coefficient sweep comparison plots
+    # Compares the quantum Cv(T) curves AND the potentials/spectra
+    # themselves of several variants of the base potential that differ
+    # only in one named POTENTIAL_PARAMS coefficient (config.SCAN_PARAM),
+    # against the single classical-limit curve already computed above
+    # for the base potential, with the potential's formula
+    # (config.POTENTIAL_FORMULA) annotated on the Cv plot. Every
+    # variant's own NUM_STATES is escalated (reusing the same
+    # HOT_STATE_SAFETY/NUM_STATES_GROWTH/NUM_STATES_CAP/
+    # MAX_ESCALATION_ROUNDS knobs as the base run's own auto-tune loop)
+    # if its hot-end thermal coverage is marginal -- see
+    # Cv_Coefficient_Sweep.py's module docstring for why reusing the
+    # base run's NUM_STATES isn't unconditionally safe otherwise. A
+    # variant whose DVR solve fails outright (e.g. a coefficient value
+    # that makes the potential non-confining) is skipped with a
+    # diagnostic rather than aborting the whole sweep -- see
+    # Cv_Coefficient_Sweep.run_coefficient_sweep. Does NOT touch the
+    # base potential's own pipeline/results above -- this section only
+    # ever adds new figures, saved to their own coefficient_sweep/
+    # folder (see figures/output_paths.py).
     # =================================================================
     print("\n" + "="*60)
     print(f"  SECTION 7 — Coefficient sweep ({SCAN_PARAM})")
@@ -385,5 +393,7 @@ if __name__ == "__main__":
             scan_param=SCAN_PARAM, scan_step=SCAN_STEP, scan_count=SCAN_COUNT,
             num_states=NUM_STATES, mass=MASS, hbar=HBAR,
             system_name=SYSTEM_NAME, formula_template=POTENTIAL_FORMULA,
+            hot_state_safety=HOT_STATE_SAFETY, num_states_growth=NUM_STATES_GROWTH,
+            num_states_cap=NUM_STATES_CAP, max_escalation_rounds=MAX_ESCALATION_ROUNDS,
             T_units_label=T_UNITS_LABEL,
         )
