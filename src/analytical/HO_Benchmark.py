@@ -1,24 +1,19 @@
 """
-HO_Benchmark_1_1.py
+HO_Benchmark.py
 =====================================================================
 WHAT THIS FILE DOES
 ---------------------------------------------------------------------
 HO-only benchmark layer: takes the NUMERICAL results already produced
-by Quantum_Classical_Combined_1_9.py's `run()` (the true quantum
+by Quantum_Classical_Combined.py's `run()` (the true quantum
 Cv(T) curve from DVR energies + the numerically found classical
 limit Cv(T)) and overlays them against the ANALYTICAL Harmonic
-Oscillator solutions from HO_Analytical_1_0.py (the exact Einstein
+Oscillator solutions from HO_Analytical.py (the exact Einstein
 Cv(T) formula + the exact classical limit, k_B). It then quantifies
 the agreement (absolute/relative error vs temperature) and plots
-everything together.
-
-CHANGELOG (v1.0 -> v1.1)
----------------------------------------------------------------------
-- Removed "Einstein" and "analytic" from all plot labels. Curves are
-  now labelled simply as "numerical" vs "analytical" throughout, so
-  the same label style generalises cleanly to future systems where
-  the reference might be a finer numerical solution rather than a
-  known analytic formula.
+everything together. Curves are labelled "numerical" vs "analytical"
+throughout (not "Einstein"/HO-specific names), so the label style
+generalises cleanly to Cv_Numerical_Benchmark.py's own base-vs-reference
+benchmark for systems with no closed-form answer.
 =====================================================================
 """
 
@@ -155,7 +150,7 @@ def plot_ho_cv_benchmark(T_arr, cv_quantum_numeric, cv_quantum_analytic,
 # =====================================================================
 def run_ho_benchmark(numeric_results, hbar=1.0, omega=1.0, kB=1.0):
     """
-    Take the dict returned by Quantum_Classical_Combined_1_9.run()
+    Take the dict returned by Quantum_Classical_Combined.run()
     for the HO system, compute the matching analytic quantum Cv(T)
     curve and analytic classical limit over the same temperature
     grid, quantify the numeric-vs-analytic agreement, print a short
@@ -164,7 +159,7 @@ def run_ho_benchmark(numeric_results, hbar=1.0, omega=1.0, kB=1.0):
     Parameters
     ----------
     numeric_results : dict
-        The dict returned by `Quantum_Classical_Combined_1_9.run()`
+        The dict returned by `Quantum_Classical_Combined.run()`
         when called on HO energy levels. Must contain "T_arr",
         "cv_quantum", and "cv_classical".
     hbar, omega, kB : float, optional

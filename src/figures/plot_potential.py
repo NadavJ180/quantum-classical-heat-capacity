@@ -25,11 +25,12 @@ window.
 The reusable part is `plot_potential_with_spectrum`: given a grid span,
 potential function, and an already-computed spectrum, it builds and
 saves both figures without doing any DVR work of its own. This is what
-lets Quantum_HO_Master.py call it directly from its own Section 1,
-reusing the base grid and energies it already computed there instead
-of paying for a second 3-pass converged solve -- so running the master
-pipeline once is enough; this script never needs to be run separately
-just to get these figures.
+lets Quantum_HO_Master.py call it directly from its own Section 1 & 4
+auto-tune loop, once that loop settles, reusing the final grid and
+energies it already computed there instead of paying for a second
+3-pass converged solve -- so running the master pipeline once is
+enough; this script never needs to be run separately just to get
+these figures.
 
 Run as a standalone script (`python plot_potential.py`), `main()` does
 its own grid auto-configuration and 3-pass converged solve first (for
@@ -256,8 +257,8 @@ def main():
     )
 
     print("Solving (3-pass converged) for the real energy levels "
-          "-- this reuses the same call as Section 1, so it can take "
-          "a little while for large NUM_STATES ...")
+          "-- this reuses the same call as Section 1 & 4's DVR solve, "
+          "so it can take a little while for large NUM_STATES ...")
     energies = get_fully_converged_energy_levels(
         potential_func=my_potential,
         num_levels=NUM_STATES,

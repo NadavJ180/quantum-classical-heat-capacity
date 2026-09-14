@@ -22,12 +22,17 @@ the repo-root figures/ folder organized as runs accumulate:
 <category>-- which kind of diagnostic the figure is: energy_levels
              (includes the potential-shape plot from plot_potential.py --
              it's an energy-level diagnostic too, just not a computed-
-             error one), convergence, cv (both the quantum/classical Cv
+             error one), convergence, cv (the quantum/classical Cv
              summary and the base-vs-reference/analytic benchmarks --
              kept in one folder rather than splitting by how the
-             comparison curve was obtained), or dvr_limits. Matches the
-             categories already named in FINDINGS.md's "Reading the
-             Diagnostic Plots" table.
+             comparison curve was obtained), dvr_limits, or
+             coefficient_sweep (Cv_Coefficient_Sweep.py's own dedicated
+             folder for BOTH its figures -- the Cv comparison plot and
+             the potential/spectrum comparison plot(s) -- deliberately
+             separate from cv/energy_levels since these compare several
+             potentials against each other, not diagnose the base run).
+             Matches the categories already named in FINDINGS.md's
+             "Reading the Diagnostic Plots" table.
 
 Every path component (system, params, category, and every figure
 filename) is built only from [A-Za-z0-9_-] -- no spaces, dots, commas,
@@ -58,11 +63,16 @@ rather than raising.
 
 NOTE ON BULK SCANS: this module holds its context as a plain module-
 level dict, not per-process/thread-isolated state. A bulk-scan driver
-that loops over parameter values in a single process should call
-`set_context(...)` again at the start of each iteration, before that
-iteration's pipeline runs -- the same pattern already used once per
-script by Quantum_HO_Master.py and plot_potential.py, just repeated
-in a loop.
+that loops over parameter values in a single process and wants each
+combination's own full set of diagnostics (all seven sections, in its
+own folder) should call `set_context(...)` again at the start of each
+iteration, before that iteration's pipeline runs -- the same pattern
+already used once per script by Quantum_HO_Master.py and
+plot_potential.py, just repeated in a loop. This is a heavier pattern
+than Cv_Coefficient_Sweep.py's built-in coefficient sweep (Section 7),
+which deliberately does NOT call `set_context` per variant -- all of
+its variants' curves land in one comparison figure, inside the base
+run's own (single) context.
 =====================================================================
 """
 

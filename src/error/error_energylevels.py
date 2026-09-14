@@ -1,30 +1,21 @@
 """
-
+error_energylevels.py
 =====================================================================
 WHAT THIS FILE DOES
 ---------------------------------------------------------------------
-Accuracy check for the smooth-potential DVR solver: compares the
-numerical Harmonic Oscillator energy levels produced by
-DVR_Algorithm_1_3.py against the exact analytic levels from
-HO_Analytical_1_0.py, level by level, and reports/plots how the
-error grows with the state index n.
+Accuracy check for the smooth-potential DVR solver: compares any two
+energy spectra of the same length, level by level, and reports/plots
+how the error grows with the state index n. Despite the module's
+HO-flavored function names (a holdover from when this file's only
+use case was DVR vs. the harmonic oscillator's exact formula),
+nothing here is HO-specific -- it only ever compares two plain arrays.
 
-This is the tool you reach for whenever you want to know "how
-accurate is my DVR grid, really?" -- which matters a lot once you
-move on to systems (double wells, anharmonic potentials, etc.) that
-have no analytic answer to compare against. Establishing the
-accuracy here, where the truth is known exactly, tells you how much
-to trust the same solver elsewhere.
-
-CHANGELOG (v1.0 -> v1.1)
----------------------------------------------------------------------
-- No logic change. Clarified the docstring of
-  `compute_energy_level_errors` to make explicit that, despite this
-  file's HO-specific name, that one function only ever compares two
-  plain energy arrays and has no HO-specific assumptions baked in --
-  it is reused as-is by DVR_Limit_Finder_1_0.py for general systems,
-  where the second array may be a finer numerical reference solution
-  instead of an analytic one.
+In the current pipeline (Quantum_HO_Master.py, Section 3) the second
+array is always a finer numerical reference spectrum (from
+DVR_Reference_Generator.py), not an analytic one; DVR_Limit_Finder.py
+also reuses `compute_energy_level_errors` directly for its own
+resolution/level-count breakdown searches. This is the tool you reach
+for whenever you want to know "how accurate is my DVR grid, really?"
 =====================================================================
 """
 
@@ -45,10 +36,11 @@ def compute_energy_level_errors(E_numeric, E_analytic):
 
     NOTE ON GENERALITY: nothing in this function is HO-specific -- it
     only ever compares two plain arrays of the same length. `E_analytic`
-    is named for this file's primary use case (an exact closed-form
-    spectrum), but it can equally be a finer/independently-verified
-    numerical reference solution for systems with no analytic answer.
-    DVR_Limit_Finder_1_0.py reuses this exact function for that purpose.
+    is named for this function's original use case (an exact closed-form
+    spectrum), but in the current pipeline it is always a finer
+    numerical reference solution instead -- systems like the double
+    well have no analytic answer to compare against. DVR_Limit_Finder.py
+    reuses this exact function for that same purpose.
 
     Parameters
     ----------

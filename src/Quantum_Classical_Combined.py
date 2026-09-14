@@ -1,12 +1,12 @@
 """
-Quantum_Classical_Combined_1_9.py
+Quantum_Classical_Combined.py
 =====================================================================
 WHAT THIS FILE DOES
 ---------------------------------------------------------------------
 General-purpose (system-agnostic) Cv pipeline: given an array of
 energy levels for ANY system, this file computes the true quantum
 Cv(T) curve directly from the spectrum, calls into
-Classical_Limit_Numerical_1_0.py to find the numerical classical
+Classical_Limit_Numerical.py to find the numerical classical
 limit Cv(T) across the same temperature range, and produces all the
 diagnostic + summary plots (xi-convergence diagnostic, n-convergence
 diagnostic, and the combined Cv(T) curve plot). Everything here is
@@ -15,25 +15,13 @@ in -- it has no opinion about where those energies came from (DVR,
 analytic formula, anything).
 
 This file does NOT contain any hard-coded physical systems (no Box,
-no HO, no Double Well). Those now live in their own driver
-files/sections so this stays a reusable, system-agnostic pipeline.
-
-CHANGELOG (v1.8 -> v1.9)
----------------------------------------------------------------------
-- MAJOR RESTRUCTURE: extracted the core numerical engine (compute_cv,
-  converge_xi, converge_n, sweep_temperature_range) out into
-  Classical_Limit_Numerical_1_0.py. This file now imports that engine
-  rather than defining it locally.
-- REMOVED `auto_configure_dvr` (moved into DVR_Algorithm_1_3.py,
-  where it now belongs alongside the smooth-only DVR solver it feeds).
-- REMOVED all hard-coded `__main__` system definitions (Box, HO,
-  Double Well) that used to live at the bottom of this file. Per the
-  current project scope, only the HO system is exercised, and it now
-  lives in its own benchmark/master files so this pipeline file can
-  stay strictly general-purpose and reusable for future systems.
-- No change to the plotting code or to `run()`'s control flow versus
-  v1.8 -- this is a pure code-organization split, not a physics change.
-- Expanded module/function docstrings.
+no HO, no Double Well). Those live in their own driver files/sections
+(Quantum_HO_Master.py, Cv_AutoTune.py, Cv_Coefficient_Sweep.py) so
+this stays a reusable, system-agnostic pipeline -- callers may invoke
+`run()` more than once per process (e.g. the auto-tune escalation
+loop in Quantum_HO_Master.py re-runs it with a growing NUM_STATES/
+XI_START each round), and each call's diagnostic plots simply
+overwrite the previous ones on disk.
 =====================================================================
 """
 
@@ -252,7 +240,7 @@ def run(energies, system_name,
     """
     Run the full general-purpose Cv pipeline for ANY system given its
     energy spectrum: sweep the temperature range, find the numerical
-    classical limit at every T (via Classical_Limit_Numerical_1_0),
+    classical limit at every T (via Classical_Limit_Numerical),
     compute the true quantum Cv(T) curve, and produce the
     xi-convergence diagnostic, n-convergence diagnostic (each shown
     at the single hardest-to-converge temperature), and the combined

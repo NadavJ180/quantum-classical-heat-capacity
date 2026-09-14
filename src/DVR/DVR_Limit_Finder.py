@@ -1,5 +1,5 @@
 """
-DVR_Limit_Finder_1_4.py
+DVR_Limit_Finder.py
 =====================================================================
 WHAT THIS FILE DOES
 ---------------------------------------------------------------------
@@ -17,41 +17,19 @@ breakdown point in two complementary directions:
         computational cost) then grow the number of levels requested
         from that SAME grid until the error vs reference exceeds
         tolerance. Finds the highest state index that grid can still
-        be trusted for, and now continues searching beyond the initial
-        reference length when an extension function is provided.
+        be trusted for. If an `extend_reference_func` is provided, the
+        search calls it to compute additional reference levels on
+        demand once the initial reference spectrum is exhausted,
+        continuing all the way up to the grid's hard ceiling
+        (num_points - 2) so the resulting plot always shows the full
+        error curve including the breakdown cliff, regardless of how
+        many reference levels were pre-computed upstream. Its
+        signature is `extend_reference_func(n_needed: int) -> array_like`,
+        where `n_needed` is the total number of reference levels
+        required (not a count of extras); the function may compute
+        them fresh each call, caching is the caller's responsibility.
 
 Both searches work with ANY potential and ANY reference spectrum.
-
-CHANGELOG (v1.3 -> v1.4)
----------------------------------------------------------------------
-- `find_maximum_levels` gains an optional `extend_reference_func`
-  parameter. Previously, when the search reached the end of the
-  supplied reference spectrum without finding a breakdown spike, it
-  stopped and reported "capped by reference_length" -- leaving the
-  plot with a flat floor and no visible cliff.
-
-  With `extend_reference_func` provided, the search instead calls
-  that function to compute additional reference levels on demand,
-  then continues growing n all the way up to the grid's hard ceiling
-  (num_points - 2). This guarantees the plot always shows the full
-  error curve including the breakdown cliff, regardless of how many
-  reference levels were pre-computed upstream.
-
-  The callable signature is:
-      extend_reference_func(n_needed: int) -> array_like
-  where n_needed is the total number of reference levels required
-  (not a count of extras). The function may compute them fresh each
-  call; caching is the caller's responsibility.
-
-  A mutable container (_ref) is used internally so the `evaluate`
-  closure always references the latest (possibly extended) reference
-  without needing nonlocal.
-
-  If `extend_reference_func` is None (default), behaviour is
-  identical to v1.3.
-
-- `plot_level_limit_search` updated to annotate "Reference extended"
-  in the plot title when the search used the extension function.
 =====================================================================
 """
 
@@ -393,9 +371,9 @@ def find_maximum_levels(potential_func, x_min, x_max, num_points, reference_ener
             extend_reference_func(n_needed: int) -> array_like
         and must return at least `n_needed` reference energy levels.
         The search then continues up to the grid's hard ceiling.
-        If None (default), behaviour is unchanged from v1.3: the
-        search stops at min(num_points-2, len(reference_energies))
-        and reports "capped by reference_length".
+        If None (default), the search stops at
+        min(num_points-2, len(reference_energies)) and reports
+        "capped by reference_length".
 
     Returns
     -------

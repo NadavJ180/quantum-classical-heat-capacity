@@ -1,14 +1,15 @@
 """
-DVR_Reference_Generator_1_0.py
+DVR_Reference_Generator.py
 =====================================================================
 WHAT THIS FILE DOES
 ---------------------------------------------------------------------
 Generates a HIGH-PRECISION NUMERICAL REFERENCE energy spectrum by
 running the DVR solver on a finer and/or wider grid than the "base"
 grid used in the main pipeline. This reference spectrum plays the
-role that the analytical solution plays in HO_Benchmark -- except it
-works for ANY smooth potential, including ones with no closed-form
-eigenvalues.
+role that the analytical solution plays for the harmonic oscillator
+(see HO_Benchmark.py) -- except it works for ANY smooth potential,
+including ones with no closed-form eigenvalues. It is the sole
+ground truth used by Sections 3, 5, and 6 of Quantum_HO_Master.py.
 
 The standard scaling is:
     span  : L  →  span_factor × L    (default: 2× wider)
@@ -32,14 +33,6 @@ Rationale:
   This is the same idea as Richardson extrapolation, but used here
   purely as a CONVERGENCE CHECK rather than to improve the base
   result itself.
-
-CHANGELOG (NEW FILE, v1.0)
----------------------------------------------------------------------
-- New file. Replaces the role of HO_Analytical_1_0.py as the
-  ground-truth supplier for systems with no analytic solution.
-  DVR_Limit_Finder_1_2 already accepted any reference spectrum; this
-  file provides a principled way to generate one without needing
-  analytical formulas.
 =====================================================================
 """
 

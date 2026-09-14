@@ -1,5 +1,5 @@
 """
-HO_Analytical_1_0.py
+HO_Analytical.py
 =====================================================================
 WHAT THIS FILE DOES
 ---------------------------------------------------------------------
@@ -7,6 +7,9 @@ Closed-form (analytic) reference solutions for the 1-D Quantum
 Harmonic Oscillator (HO). These are exact formulas -- no DVR, no
 diagonalization, no numerical convergence scanning -- used purely as
 ground truth to benchmark the numerical (DVR-based) pipeline against.
+This file is HO-only: it exists specifically to certify the pipeline's
+numerics against a system with a known closed-form answer, one time,
+rather than as part of the main (potential-agnostic) driver.
 
 Provides:
     - Exact energy eigenvalues E_n = hbar*omega*(n + 1/2)
@@ -15,20 +18,8 @@ Provides:
       1-D harmonic oscillator is simply k_B (one quadratic kinetic +
       one quadratic potential degree of freedom, by equipartition)
 
-CHANGELOG (NEW FILE, v1.0)
----------------------------------------------------------------------
-- Supersedes the analytic parts of Heat_Capacity_Graphs_HO_BOX.py.
-  Per current scope, the Box-potential equations have been REMOVED
-  entirely -- this file is HO-only, kept around specifically to
-  benchmark the general numerical pipeline against a system that has
-  a known closed-form answer.
-- Split the analytic formulas out of the plotting script they used to
-  live in. This file does no plotting and makes no figures -- it just
-  returns numbers. Plotting lives in HO_Benchmark_1_0.py.
-- The old box-potential "brute-force xi/n convergence search" used to
-  find its classical limit (`check_n_convergance`, `check_xi_convergence`,
-  `find_classical_limit_Box`) has been removed for HO, since the HO
-  classical limit is known exactly (k_B) and needs no numerical search.
+This file does no plotting and makes no figures -- it just returns
+numbers. Plotting lives in HO_Benchmark.py.
 =====================================================================
 """
 

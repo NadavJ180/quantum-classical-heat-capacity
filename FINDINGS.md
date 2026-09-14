@@ -40,6 +40,22 @@ set below by the level spacing needing to look continuous, and above by the top 
 
 **On the HO and equipartition:** the HO's classical $C_v$ is exactly $k_B$ at *every* temperature, not just asymptotically at high $T$ — so the numerically found plateau matches the equipartition prediction across the whole sweep. That exact temperature-independence is a special feature of the HO (a purely quadratic potential); it isn't guaranteed to hold as cleanly for an anharmonic potential like the double well.
 
+### Coefficient-Sweep Validity: Is Reusing `NUM_STATES` Across Variants Legitimate?
+
+The coefficient sweep (`Cv_Coefficient_Sweep.py`, Section 7) evaluates the literal quantum $C_v(T) = k_B\beta^2\,\mathrm{Var}(E)$ directly from each variant's own truncated spectrum — no $\xi$-scan, no classical-limit search. That formula is *exact* for a truncated spectrum of `NUM_STATES` levels at any temperature where the omitted, higher levels would have carried negligible Boltzmann weight anyway, i.e. wherever
+
+$$E_{\max} - E_0 \;\gg\; k_B T_{\text{hot}}, \qquad T_{\text{hot}} = 1/\beta_{\min},$$
+
+the same criterion `Cv_AutoTune.py` already enforces for the base run (`HOT_STATE_SAFETY`, target ratio $\approx 20$). `NUM_STATES` is tuned by the base run's own auto-tune loop to satisfy this for the **base** potential's spectrum only — reusing that same level *count* for a different coefficient value is not automatically safe, because the level-spacing scaling itself depends on the coefficient being varied.
+
+Concretely, WKB quantization of a well dominated by a quartic term $V\sim a\,x^4$ gives
+
+$$\oint p\,dx = \left(n+\tfrac12\right)\pi\hbar, \qquad p=\sqrt{2m(E-ax^4)} \;\Rightarrow\; E_n \;\sim\; a^{1/3}\,n^{4/3}.$$
+
+So for a **fixed** level count $n=$`NUM_STATES`, $E_n$ grows with $a^{1/3}$: sweeping the leading coefficient **upward** only ever makes the base run's `NUM_STATES` choice *more* conservative ($E_{\max}$ grows). Sweeping it **downward** — toward zero, or negative, exactly the direction that produces a non-confining potential (see "Troubleshooting" and the coefficient-sweep resilience handling) — *shrinks* $E_{\max}$ for the same level count, and could in principle silently reproduce the same truncation artifact (a numerical-Schottky-like collapse at the hot end) that `Cv_AutoTune.py` exists to prevent for the base run, without anything flagging it.
+
+**The fix, not just the diagnosis:** `Cv_Coefficient_Sweep.solve_variant_with_hot_coverage` checks the exact same $E_{\max}/k_BT_{\text{hot}}$ criterion for every variant's own spectrum after solving it, and if it fails, escalates that *one* variant's own `NUM_STATES` (reusing `NUM_STATES_GROWTH`/`NUM_STATES_CAP`/`MAX_ESCALATION_ROUNDS` — the same knobs the base run's own escalation loop uses) and re-solves, up to the same bounds. A variant that still can't clear the margin after escalating is kept rather than dropped — the low/mid-$T$ region where a Schottky-anomaly-like bump actually appears is governed by the low-lying levels and the well's own shape, not by hot-end truncation, so it stays informative — but it is flagged, both with a console warning and a `*` after its value in the Cv plot's legend, rather than silently trusted at every temperature.
+
 ## Findings So Far
 
 - **HO validation:** base-grid energy levels agree with the numerical reference to within machine precision across the full computed spectrum. The resulting quantum and classical-limit $C_v(T)$ curves agree with the exact analytic (Einstein-oscillator) formula to machine precision as well — evidence that the pipeline's internal, closed-form-free validation methodology (base grid vs. numerical reference) actually tracks the true answer, not just a shared artifact of the method.
@@ -57,22 +73,28 @@ set below by the level spacing needing to look continuous, and above by the top 
 | **$C_v(T)$ summary** (quantum + classical limit + $\xi_{\text{conv}}(T)$/$n_{\text{conv}}(T)$) | Quantum curve rises smoothly from ~0 to the classical plateau; the secondary axis shows which temperatures were hardest to converge. |
 | **DVR resolution/level-count limit plots** | Long machine-precision floor, then an abrupt cliff once $\Delta x$ (or requested $n$) crosses the solver's breakdown point. |
 | **Cv benchmark plots** (base vs. reference, or numerical vs. analytic) | Flat, featureless error curve well below the convergence tolerance across the full temperature range; structure in the error is diagnostic (see Troubleshooting below). |
+| **Coefficient sweep — Cv** (`coefficient_sweep/cv_coefficient_sweep.png`, Section 7) | One quantum $C_v(T)$ curve per swept coefficient value against the base run's shared classical-limit curve, titled with the potential's own formula (fixed coefficients numeric, swept one symbolic). All curves should converge onto the classical-limit curve at high $T$; a bigger low/mid-$T$ overshoot before settling indicates a bigger (numerical) Schottky-anomaly-like bump for that coefficient value. Two curves exactly coincide (one invisible) when their coefficient values give mirror-image potentials with identical spectra — see `README.md`'s "Coefficient Sweep" section. A coefficient value that made the potential non-confining is simply missing from the plot (see the console's per-variant diagnostic and end-of-run summary) rather than aborting the run. A `*` after a value in the legend means its hot-end thermal coverage stayed marginal even after per-variant escalation — treat that curve's high-$T$ tail with caution. |
+| **Coefficient sweep — potentials** (`coefficient_sweep/potential_comparison.png` or `potential_<param>_<value>.png`, Section 7) | Each variant's $V(x)$ with its own low-lying spectrum, zoomed on the well's own structure, colored to match the Cv plot. Use this to correlate a bigger Cv anomaly with the actual change in well shape (e.g. a lower/wider barrier, more asymmetry, near-degenerate low-lying pairs) that coefficient value produced. |
 
 ## Key Parameters (`src/config.py`)
 
 | Parameter | Effect |
 |-----------|--------|
-| `NUM_STATES` | More levels → higher computational cost, but wider temperature coverage and a higher trustworthy-$n$ ceiling in the DVR limit analysis. |
-| `BETA_MIN` / `BETA_MAX` | Temperature sweep window. Too cold a `BETA_MAX` shrinks the range where the classical limit converges. |
-| `XI_START` | Higher start → classical limit locatable at colder temperatures; `3.0` is a good default. |
-| `TOL_XI` / `TOL_CV` | Tighter tolerances → more accurate classical limit, at the cost of a slower sweep and more scan steps. |
+| `NUM_STATES` | Round-0 starting guess only as of the auto-tune loop (see below) — more levels → higher computational cost, but wider temperature coverage and a higher trustworthy-$n$ ceiling in the DVR limit analysis. |
+| `BETA_MIN` / `BETA_MAX` | Temperature sweep window. `BETA_MIN = None` (default) auto-derives the hot end from $T_{\max}=10\Delta E/k_B$ (see "Auto-Tuning" below); set a float to hand-pick it instead. Too cold a `BETA_MAX` shrinks the range where the classical limit converges. |
+| `XI_START` | Round-0 starting guess only — higher start → classical limit locatable at colder temperatures; `3.0` is a good default and is escalated automatically if the cold end still fails to converge. |
+| `TOL_XI` / `TOL_CV` | Tighter tolerances → more accurate classical limit, at the cost of a slower sweep and more scan steps. Not touched by the auto-tune loop. |
 | `LIMIT_TOLERANCE` | Pass/fail threshold used by the DVR resolution/level-count limit searches. |
 | `REFERENCE_SPAN_FACTOR` / `REFERENCE_DX_FACTOR` | How much wider/finer the numerical reference grid is than the base grid; `2.0`/`2.0` (span doubled, spacing halved) is the default. |
+| `AUTO_ESCALATE`, `MAX_ESCALATION_ROUNDS`, `NUM_STATES_GROWTH`, `NUM_STATES_CAP`, `XI_START_GROWTH`, `MAX_XI_STEPS_GROWTH`, `HOT_STATE_SAFETY`, `ESCALATION_FRACTION_THRESHOLD` | Control the `Cv_AutoTune.py` escalation loop (see "Auto-Tuning" in `README.md`). Meant to be touched rarely, if ever. |
+| `SCAN_PARAM`, `SCAN_STEP`, `SCAN_COUNT` | Which `POTENTIAL_PARAMS` coefficient the Section 7 comparison plot sweeps, its step size, and how many extra variants per side of the base value (see "Coefficient Sweep" in `README.md`). |
 
 ## Troubleshooting
 
+As of the `Cv_AutoTune.py` escalation loop, the two truncation artifacts below are detected and corrected automatically at every run (see "Auto-Tuning" in `README.md`) — `NUM_STATES` and `XI_START`/`MAX_XI_STEPS` are grown and the DVR solve + sweep retried, up to `MAX_ESCALATION_ROUNDS`. The manual remedies still apply if you disable auto-escalation (`AUTO_ESCALATE = False`), if the loop still hasn't cleared the diagnostics by its last round (it prints a `UserWarning` and proceeds with the last attempt), or for the Section 6 reference-grid benchmark and Section 7 coefficient-sweep variants, which reuse the base run's final (possibly already-escalated) settings rather than escalating independently.
+
 - **Quantum $C_v$ cuts off abruptly:** extend the temperature sweep further in the relevant direction (smaller $\beta$ for higher $T$, larger $\beta$ for lower $T$) — you likely haven't reached the plateau yet.
-- **Classical limit drops at low $T$:** increase `XI_START`.
-- **Classical limit drops at high $T$ / Cv benchmark error rises at high $T$:** the partition sum may be truncating thermally-accessible levels — increase `NUM_STATES`.
+- **Classical limit drops at low $T$:** increase `XI_START` (auto-escalated; the loop checks for this at the cold half of the sweep and grows `XI_START`/`MAX_XI_STEPS` together).
+- **Classical limit drops at high $T$ / Cv benchmark error rises at high $T$:** the partition sum may be truncating thermally-accessible levels — increase `NUM_STATES` (auto-escalated; the loop checks for this at the hot half of the sweep).
 - **Cv benchmark error rises at low $T$:** the lowest eigenvalues are inaccurate — check the base grid's resolution or boundary span.
 - **Relative-error metrics blowing up at very low $T$:** both the numerator and denominator are underflowing toward zero there; check the *absolute* error instead, which stays meaningful throughout.
