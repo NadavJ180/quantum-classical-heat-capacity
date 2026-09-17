@@ -64,4 +64,14 @@ Collapse quality: max_x |Cv_g(x) - Cv_{g=1}(x)|, x = T/(E1-E0)
   g=1     : max deviation = 0.00e+00
   g=1.25  : max deviation = 1.12e-12
   g=1.5   : max deviation = 1.37e-12
+
+========================================================================
+Arbitrary-gap demo: (A,B,C)=(0.25,-0.5,-0.5), gap = E_5-E_4
+========================================================================
+
+Collapse quality using E_5-E_4 instead of E1-E0:
+  g=0.75  : max deviation = 1.25e-12
+  g=1     : max deviation = 0.00e+00
+  g=1.25  : max deviation = 8.22e-13
+  g=1.5   : max deviation = 2.87e-12
 ```

@@ -45,6 +45,16 @@ rescale (A, B, C) -> (A/g^6, B/g^5, C/g^4), and confirm that Cv(T)
 plotted against T normalized by the level-0/1 gap (E1-E0) collapses
 onto ONE g-independent curve.
 
+IS E1-E0 SPECIAL, OR WOULD ANY GAP E_{n+1}-E_n WORK?
+---------------------------------------------------------------------
+Nothing about E1-E0 specifically is required. Since EVERY level obeys
+E_n(g) = E_n(1)/g^2, any two levels' DIFFERENCE also scales by the
+same 1/g^2: E_{n+1}(g) - E_n(g) = [E_{n+1}(1) - E_n(1)] / g^2, for any
+n. Normalizing T by any such gap cancels the g^2 exactly the same way
+E1-E0 does (see the docstring of `demo_arbitrary_gap` below for the
+explicit demonstration this file also produces, using a high-n gap
+instead of the ground-state one).
+
 WHAT'S IN THIS FOLDER
 ---------------------------------------------------------------------
 homogeneous_scaling_check.py   This script (run it directly).
@@ -141,7 +151,7 @@ def run_one_line(b, report_lines):
         axes[1].plot(X_GRID, cv, color=color, label=f"g={g:g}  (\u03b401={delta01:.3g})")
 
     axes[0].set_xscale("log")
-    axes[0].set_xlabel(r"physical $k_B T$")
+    axes[0].set_xlabel(r"$k_B T$")
     axes[0].set_ylabel(r"$C_v/k_B$")
     axes[0].set_title("NOT normalized -- curves should differ")
     axes[0].legend(fontsize=8)
@@ -173,6 +183,55 @@ def run_one_line(b, report_lines):
     return out_path
 
 
+def demo_arbitrary_gap(b, n, report_lines):
+    """
+    Same collapse test as `run_one_line`, but normalizing T by an
+    ARBITRARY gap E_{n+1}-E_n instead of the ground-state gap E1-E0 --
+    demonstrating that E1-E0 was never special: every gap scales by
+    the same 1/g^2, so any of them cancels g exactly the same way.
+    """
+    A, C = A_BASE, C_BASE
+    B = b
+    report_lines.append(f"\n{'='*72}\nArbitrary-gap demo: (A,B,C)=({A},{B},{C}), gap = E_{n+1}-E_{n}\n{'='*72}")
+
+    per_g = {}
+    for g in G_VALUES:
+        Ag, Bg, Cg = A / g**6, B / g**5, C / g**4
+        E = solve(Ag, Bg, Cg, num_states=max(NUM_STATES, 2 * (n + 2)))
+        gap = float(E[n + 1] - E[n])
+        per_g[g] = {"E": E, "gap": gap}
+        print(f"  [arbitrary-gap demo] g={g:g}: E_{n}={E[n]:.6g}  E_{n+1}={E[n+1]:.6g}  gap={gap:.6g}")
+
+    fig, ax = plt.subplots(figsize=(7, 5.2))
+    colors = plt.cm.viridis(np.linspace(0, 0.85, len(G_VALUES)))
+    cv_by_g = {}
+    for g, color in zip(G_VALUES, colors):
+        gap = per_g[g]["gap"]
+        T_phys = X_GRID * gap
+        beta_arr = 1.0 / T_phys
+        cv = compute_quantum_heat_capacity_curve(per_g[g]["E"], beta_arr, xi=1.0)
+        cv_by_g[g] = cv
+        ax.plot(X_GRID, cv, color=color, label=f"g={g:g}  (gap={gap:.3g})")
+    ax.set_xscale("log")
+    ax.set_xlabel(rf"$k_B T \,/\, (E_{{{n+1}}}-E_{{{n}}})$")
+    ax.set_ylabel(r"$C_v/k_B$")
+    ax.set_title(f"Normalized by E_{n+1}-E_{n} instead of E1-E0 -- still ONE curve")
+    ax.legend(fontsize=8)
+    ax.grid(alpha=0.3, linestyle="--")
+    fig.tight_layout()
+    out_path = os.path.join(FIG_DIR, f"collapse_arbitrary_gap_n{n}.png")
+    fig.savefig(out_path, dpi=140)
+    plt.close(fig)
+    print(f"  saved {out_path}")
+
+    ref_curve = cv_by_g[1.0]
+    report_lines.append(f"\nCollapse quality using E_{n+1}-E_{n} instead of E1-E0:")
+    for g in G_VALUES:
+        max_dev = float(np.nanmax(np.abs(cv_by_g[g] - ref_curve)))
+        report_lines.append(f"  g={g:<6g}: max deviation = {max_dev:.2e}")
+    return out_path
+
+
 def main():
     report_lines = [
         "Homogeneous energy scaling check",
@@ -185,6 +244,12 @@ def main():
     figs = []
     for b in B_LINES:
         figs.append(run_one_line(b, report_lines))
+
+    # Demonstrate the gap choice is arbitrary: normalize by a HIGH-n
+    # gap (E5-E4) instead of the ground-state gap (E1-E0) and confirm
+    # the collapse still holds -- see the module docstring's "IS E1-E0
+    # SPECIAL..." section.
+    figs.append(demo_arbitrary_gap(B_LINES[len(B_LINES) // 2], n=4, report_lines=report_lines))
 
     report_text = "\n".join(report_lines) + "\n"
     print("\n" + report_text)
