@@ -122,6 +122,16 @@ SCAN_PARAM = "b"
 SCAN_STEP  = 0.2
 SCAN_COUNT = 2
 
+# The value of SCAN_PARAM that recovers the SYMMETRIC potential (b = 0
+# for this well -- see my_potential's comment above). None of the
+# variants produced by SCAN_STEP/SCAN_COUNT around the current base
+# value (b = -0.5) land on b = 0, so without this the coefficient
+# sweep would never actually include a genuinely symmetric reference
+# curve. run_coefficient_sweep adds it as an extra variant (flagged
+# "(symmetric)" in the Cv plot legend) whenever it isn't already
+# covered by the regular sweep. Set to None to disable.
+SCAN_SYMMETRIC_VALUE = 0.0
+
 # --- xi / n convergence parameters ---
 # XI_START = 3.0: first probe is already at effective T/9, allowing
 # the classical-limit plateau to be found at much colder temperatures
