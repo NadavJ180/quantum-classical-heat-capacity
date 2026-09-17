@@ -119,7 +119,7 @@ OVERLAY_MAX = 15
 # =====================================================================
 # Build the list of per-variant parameter dicts
 # =====================================================================
-def generate_variant_params(base_params, scan_param, scan_step, scan_count):
+def generate_variant_params(base_params, scan_param, scan_step, scan_count, symmetric_value=None):
     """
     Build `2*scan_count + 1` copies of `base_params`, each with
     `scan_param` shifted by a multiple of `scan_step`, centered on
@@ -136,13 +136,24 @@ def generate_variant_params(base_params, scan_param, scan_step, scan_count):
     scan_count : int
         Number of EXTRA variants added on each side of the base value
         (total variants returned = 2*scan_count + 1).
+    symmetric_value : float or None, optional
+        The value of `scan_param` that recovers a SYMMETRIC potential
+        (e.g. config.SCAN_SYMMETRIC_VALUE). A regular SCAN_STEP/
+        SCAN_COUNT sweep centered on an already-asymmetric base value
+        has no reason to land on this value, so if it isn't already
+        among the generated variants it is appended as one extra
+        variant -- otherwise a "symmetric vs. asymmetric" comparison
+        would silently never include the symmetric case at all. None
+        (default) adds nothing.
 
     Returns
     -------
     list of dict
         One shallow copy of `base_params` per variant, ordered by
-        ascending offset (most negative first); the middle entry
-        (offset 0) is exactly `base_params`'s own value.
+        ascending `scan_param` value. Without `symmetric_value`, this
+        is exactly the ascending-offset order (most negative first,
+        offset 0 exactly `base_params`'s own value); with it, the
+        extra symmetric variant is inserted in its sorted position.
 
     Raises
     ------
@@ -160,6 +171,13 @@ def generate_variant_params(base_params, scan_param, scan_step, scan_count):
         params = dict(base_params)
         params[scan_param] = base_value + offset * scan_step
         variants.append(params)
+    if symmetric_value is not None and not any(
+        np.isclose(p[scan_param], symmetric_value) for p in variants
+    ):
+        symmetric_params = dict(base_params)
+        symmetric_params[scan_param] = symmetric_value
+        variants.append(symmetric_params)
+        variants.sort(key=lambda p: p[scan_param])
     return variants
 
 
@@ -411,7 +429,8 @@ def _variant_colors(n):
 # =====================================================================
 def plot_coefficient_sweep(T_arr, cv_classical_base, variant_values, variant_curves,
                             scan_param, system_name, formula_text=None,
-                            marginal_values=None, T_units_label=r"$k_B T \,/\, E_0$"):
+                            marginal_values=None, T_units_label=r"$k_B T \,/\, E_0$",
+                            variant_deltas=None, symmetric_value=None):
     """
     Plot the base run's classical-limit Cv(T) (reused, unchanged)
     together with one quantum Cv(T) curve per coefficient variant.
@@ -447,6 +466,20 @@ def plot_coefficient_sweep(T_arr, cv_classical_base, variant_values, variant_cur
         flagged with a "*" in the legend and a footnote, rather than
         silently plotted as if fully trustworthy at every T.
     T_units_label : str, optional
+    variant_deltas : list of float or None, optional
+        This variant's ground/first-excited gap, E1-E0, one per entry
+        in `variant_values` -- the same quantity the literature reports
+        as the tunneling-doublet splitting delta (see FINDINGS.md).
+        Appended to each curve's legend label so a genuine near-
+        degenerate doublet (delta tiny compared to the rest of the
+        spectrum) is distinguishable at a glance from a variant whose
+        Cv "bump" instead comes from an ordinary, non-degenerate gap.
+        None omits it from every label.
+    symmetric_value : float or None, optional
+        The value of `scan_param` that recovers the SYMMETRIC potential
+        (e.g. config.SCAN_SYMMETRIC_VALUE) -- that one curve's label is
+        flagged "(symmetric)" so it reads as the reference case rather
+        than just another swept value. None flags nothing.
 
     Returns
     -------
@@ -466,10 +499,13 @@ def plot_coefficient_sweep(T_arr, cv_classical_base, variant_values, variant_cur
     fig.suptitle("\n".join(title_lines), fontsize=13, fontweight="bold")
 
     colors = _variant_colors(len(variant_values))
-    for value, curve, color in zip(variant_values, variant_curves, colors):
+    deltas = variant_deltas if variant_deltas is not None else [None] * len(variant_values)
+    for value, curve, color, delta in zip(variant_values, variant_curves, colors, deltas):
         flag = " *" if value in marginal_values else ""
+        sym_flag = " (symmetric)" if symmetric_value is not None and np.isclose(value, symmetric_value) else ""
+        delta_text = f", δ(E1-E0)={delta:.3g}" if delta is not None else ""
         ax.plot(T_arr, curve, color=color, linewidth=1.8,
-                label=f"{scan_param} = {value:g}{flag}")
+                label=f"{scan_param} = {value:g}{sym_flag}{delta_text}{flag}")
 
     ax.plot(T_arr, cv_classical_base, color=CLASSICAL_LIMIT_COLOR, linewidth=2.2, linestyle="--",
             label="Numerical classical limit (base run)")
@@ -721,7 +757,8 @@ def run_coefficient_sweep(base_cv_results, my_potential, base_params,
                            mass, hbar, system_name, formula_template=None,
                            hot_state_safety=20.0, num_states_growth=1.6,
                            num_states_cap=4000, max_escalation_rounds=4,
-                           T_units_label=r"$k_B T \,/\, E_0$"):
+                           T_units_label=r"$k_B T \,/\, E_0$",
+                           symmetric_value=None):
     """
     Generate the coefficient variants, solve each one's own spectrum
     (escalating that variant's own NUM_STATES if its hot-end thermal
@@ -764,12 +801,22 @@ def run_coefficient_sweep(base_cv_results, my_potential, base_params,
         NUM_STATES_CAP/MAX_ESCALATION_ROUNDS, the same knobs the base
         run's own auto-tune loop uses.
     T_units_label : str, optional
+    symmetric_value : float or None, optional
+        config.SCAN_SYMMETRIC_VALUE -- the value of `scan_param` that
+        recovers the SYMMETRIC potential. Passed straight through to
+        `generate_variant_params` (added as an extra variant if the
+        regular SCAN_STEP/SCAN_COUNT sweep doesn't already include it)
+        and to `plot_coefficient_sweep` (flags that one curve's legend
+        entry "(symmetric)"). None adds/flags nothing.
 
     Returns
     -------
     dict with keys:
         variant_params, variant_curves : list of dict / ndarray
             Only the variants that converged, in swept order.
+        variant_deltas : list of float
+            Each converged variant's E1-E0 gap (see `plot_coefficient_sweep`'s
+            `variant_deltas`), same order as `variant_params`/`variant_curves`.
         failed : list of dict
             One {"params", "value", "error", "diagnosis"} entry per
             variant that failed to converge outright.
@@ -782,13 +829,13 @@ def run_coefficient_sweep(base_cv_results, my_potential, base_params,
     beta_arr = base_cv_results["beta_arr"]
     T_arr = base_cv_results["T_arr"]
 
-    variant_params = generate_variant_params(base_params, scan_param, scan_step, scan_count)
+    variant_params = generate_variant_params(base_params, scan_param, scan_step, scan_count, symmetric_value)
     all_values = [p[scan_param] for p in variant_params]
 
     rule = "─" * 60
     print(f"\n{rule}\n  Coefficient sweep: {scan_param} over {all_values}\n{rule}")
 
-    ok_params, ok_values, ok_curves, ok_records = [], [], [], []
+    ok_params, ok_values, ok_curves, ok_records, ok_deltas = [], [], [], [], []
     failed, marginal_values = [], []
     for i, params in enumerate(variant_params):
         value = params[scan_param]
@@ -815,9 +862,19 @@ def run_coefficient_sweep(base_cv_results, my_potential, base_params,
                   f"after escalation (NUM_STATES={result['num_states_used']}) -- treat T above "
                   f"~{1.0 / beta_arr.min():.3g} with caution for this curve.")
 
+        # E1-E0: the gap the literature calls the tunneling-doublet
+        # splitting delta when it's small compared to the rest of the
+        # spectrum. Reported unconditionally (not just for suspected
+        # doublets) so a curve's Cv "bump" can always be checked against
+        # whether it actually comes from a near-degenerate pair or just
+        # an ordinary, non-degenerate first excitation -- see FINDINGS.md.
+        delta01 = float(energies[1] - energies[0]) if len(energies) > 1 else float("nan")
+        print(f"    E0={energies[0]:.6g}  E1={energies[1]:.6g}  δ(E1-E0)={delta01:.6g}")
+
         ok_params.append(params)
         ok_values.append(value)
         ok_curves.append(curve)
+        ok_deltas.append(delta01)
         ok_records.append({
             "value": value, "params": params, "energies": energies,
             "x_min": result["x_min"], "x_max": result["x_max"],
@@ -829,6 +886,7 @@ def run_coefficient_sweep(base_cv_results, my_potential, base_params,
     plot_coefficient_sweep(
         T_arr, base_cv_results["cv_classical"], ok_values, ok_curves,
         scan_param, system_name, formula_text, set(marginal_values), T_units_label,
+        variant_deltas=ok_deltas, symmetric_value=symmetric_value,
     )
     potential_figure_paths = plot_variant_potentials(
         ok_records, scan_param, system_name, formula_template, base_params,
@@ -847,6 +905,7 @@ def run_coefficient_sweep(base_cv_results, my_potential, base_params,
 
     return {
         "variant_params": ok_params, "variant_curves": ok_curves,
+        "variant_deltas": ok_deltas,
         "failed": failed, "marginal_values": marginal_values,
         "potential_figure_paths": potential_figure_paths,
     }

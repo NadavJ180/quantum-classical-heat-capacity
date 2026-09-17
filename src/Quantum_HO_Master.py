@@ -80,7 +80,8 @@ from config                         import (MASS, HBAR, my_potential,
                                             XI_START_GROWTH, MAX_XI_STEPS_GROWTH,
                                             HOT_STATE_SAFETY,
                                             ESCALATION_FRACTION_THRESHOLD,
-                                            SCAN_PARAM, SCAN_STEP, SCAN_COUNT)
+                                            SCAN_PARAM, SCAN_STEP, SCAN_COUNT,
+                                            SCAN_SYMMETRIC_VALUE)
 
 
 # =====================================================================
@@ -395,5 +396,5 @@ if __name__ == "__main__":
             system_name=SYSTEM_NAME, formula_template=POTENTIAL_FORMULA,
             hot_state_safety=HOT_STATE_SAFETY, num_states_growth=NUM_STATES_GROWTH,
             num_states_cap=NUM_STATES_CAP, max_escalation_rounds=MAX_ESCALATION_ROUNDS,
-            T_units_label=T_UNITS_LABEL,
+            T_units_label=T_UNITS_LABEL, symmetric_value=SCAN_SYMMETRIC_VALUE,
         )
