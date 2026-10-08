@@ -1,49 +1,124 @@
 # History
 
-How this pipeline got to its current state. For a meeting-by-meeting account (including the reasoning behind each change), see [`docs/summaries/Meetings_Summary.tex`](docs/summaries/Meetings_Summary.tex); this is a condensed summary. Full detail is always in `git log`.
+How this pipeline got to its current state. For a meeting-by-meeting account (including the reasoning behind each change), see [`docs/summaries/Meetings_Summary.tex`](docs/summaries/Meetings_Summary.tex). This file is a condensed summary; full detail is in `git log`, and the classical-limit correction is documented in full in [`audit/classical_limit/`](audit/classical_limit/).
 
 ## Narrative
 
-The project began with the two textbook systems that have closed-form solutions — the **harmonic oscillator (HO)** and the **box potential** — used to validate the variance-based $C_v = k_B\beta^2\mathrm{Var}(E)$ formula and the $\xi$-scaling route to the classical limit against known analytic answers.
+### Analytic systems, the DVR solver, and the original ξ-scan
 
-A **Colbert–Miller sinc-DVR solver** was then built to obtain energy levels numerically rather than analytically, first tested against the HO (whose exact spectrum makes it a validation case, not a target). Early iterations manually tuned the grid; this was replaced by an **automatic grid configurator** (turning-point root-finding plus a local Nyquist criterion) that removed the need for per-potential guesswork.
+The project began with the two textbook systems that have closed-form solutions, the **harmonic oscillator (HO)** and the **box potential**. They were used to validate the variance-based $C_v = k_B\beta^2\mathrm{Var}(E)$ formula and a "ξ-scaling" route to the classical limit.
 
-Moving beyond the HO exposed several issues specific to anharmonic potentials, addressed in order:
+That first ξ-scan was written for the box (commit `e9fa799`: `E_n = n**2 * E_g / xi**2`, the box spectrum with ħ → ħ/ξ). It was later generalized (commit `cb09603`) into a function that divides *any* computed spectrum by ξ² and scans ξ for a plateau. As described below, this generalization was only exact for the box, the HO and other single power laws. That went unnoticed until October 2026, because those were exactly the systems it was checked on.
 
-- **Insufficient tail padding.** A fixed padding heuristic, calibrated for the HO, underestimated how far anharmonic wavefunction tails extend. Replaced with iterative span widening that stops once eigenvalues stop changing.
-- **Narrow $\xi$-plateau window.** Because the double well's levels scale as $E_n\propto n^{4/3}$ rather than linearly, its valid $\xi$-window is narrower than the HO's. The $\xi$-step size was made more granular (multiplier reduced from 1.3 to 1.1) so the scan reliably lands inside the window before the finite-$N$ collapse.
-- **Hard-wall potentials dropped.** The DVR core was restricted to smooth, everywhere-finite potentials only — a discontinuous potential's unbounded momentum content can't be represented on any finite grid, so supporting it safely would require a separate formulation entirely.
+A **Colbert–Miller sinc-DVR solver** was then built to obtain energy levels numerically, first tested against the HO. Early iterations tuned the grid by hand. This was replaced by an **automatic grid configurator** (turning-point root-finding plus a local Nyquist criterion).
 
-The pipeline's validation strategy also evolved: rather than relying on the HO's analytic formula as ground truth for every run, a **numerical reference generator** (an independently wider/finer DVR solve) was introduced to play that role instead — the same role the analytic formula plays for the HO, but one that works for any smooth potential, including ones with no closed form. The analytic HO comparison was kept, but demoted to a one-time external certification of the numerical-reference methodology itself, run in a separate benchmarking module rather than baked into the main pipeline.
+Moving beyond the HO exposed several issues specific to anharmonic potentials:
 
-Along the way the codebase was reorganized from a monolithic script into the current modular `src/` layout (`DVR/`, `analytical/`, `error/`, `figures/`), with version numbers dropped from filenames once the module boundaries stabilized, and diagnostic timers relocated out of the tight solver loops to avoid distorting runtime-critical code paths.
+- **Insufficient tail padding.** A fixed padding heuristic, calibrated for the HO, underestimated how far anharmonic wavefunction tails extend. It was replaced with iterative span widening that stops once eigenvalues stop changing.
+- **Narrow ξ-plateau window.** The double well's levels scale as $E_n\propto n^{4/3}$, so the old scan's valid ξ-window was narrower than the HO's, and the ξ multiplier was reduced from 1.3 to 1.1. *This concern disappeared with the 2026 correction, whose scan has no finite-N window.*
+- **Hard-wall potentials dropped.** The DVR core was restricted to smooth, everywhere-finite potentials.
 
-**Current state:** the HO benchmark (Sections 1–6 of the pipeline) is fully validated, agreeing with the exact analytic solution to machine precision. The same pipeline, unmodified beyond the potential definition, is now running on a quartic double well — the first anharmonic system, and the first candidate for a genuine physical Schottky anomaly (see `docs/summaries/IEEE_Summary.tex`).
+The validation strategy also evolved. A **numerical reference generator** (an independently wider and finer DVR solve) replaced the HO's analytic formula as the ground truth for every run. The analytic HO comparison was kept as a one-time external certification in a separate module. The codebase was reorganized from a monolithic script into the modular `src/` layout.
 
-Two further additions, both aimed at exploring the double well's Schottky-anomaly-like behavior without hand-tuning numerics on every run:
+### Auto-tuning, coefficient sweep, log-spaced temperatures
 
-- **Auto-tuning (`Cv_AutoTune.py`).** Manually changing the temperature range (`BETA_MIN`/`BETA_MAX`) could silently produce two known artifacts, already documented as manual remedies in `FINDINGS.md`'s Troubleshooting table: a numerical-Schottky-like truncation collapse in quantum $C_v$ at high $T$ (too few levels for that temperature) and a spurious drop in the classical limit at low $T$ (the $\xi$-scan running out of budget before the plateau). Sections 1 and 4 were merged into one closed-loop escalation: after each DVR solve + Cv sweep, the sweep's own existing diagnostics (finite-$N$ collapse, $n$-convergence margin, $\xi$-scan `max_steps` exhaustion) are inspected on the matching half of the temperature range, and `NUM_STATES` / `XI_START`+`MAX_XI_STEPS` are grown automatically before retrying — bounded by `MAX_ESCALATION_ROUNDS`. `BETA_MIN` also gained an "auto" mode (`None`), derived from `T_max = 10\Delta E/k_B` (the fundamental gap), so temperature range is the only parameter that needs hand-editing run to run.
-- **Coefficient sweep (`Cv_Coefficient_Sweep.py`, Section 7).** To study how one potential coefficient (e.g. the double well's cubic `b`) affects the size of the Schottky-anomaly-like bump, a comparison plot overlays several variants' quantum $C_v(T)$ curves — swept via `SCAN_PARAM`/`SCAN_STEP`/`SCAN_COUNT`, centered on and always including the base value — against the single classical-limit curve already computed for the base potential, without redoing any $\xi$/$n$-convergence search per variant. The plot is titled with the potential's actual formula (`config.POTENTIAL_FORMULA`, fixed coefficients numeric, the swept one symbolic). A variant whose coefficient value makes the potential non-confining (and so fails its DVR solve) no longer aborts the whole sweep: the failure is caught, diagnosed with a cheap potential-agnostic unboundedness check, and omitted, with the figure still built from whichever variants converged. That exploration also surfaced (and fixed) a latent bug in `DVR_Algorithm.auto_configure_dvr`: for a non-confining potential, `scipy.optimize.minimize`'s result could come back as a length-1 array instead of a scalar, silently propagating array-ness into `dx_target` and crashing a diagnostic print with an opaque `TypeError` instead of the intended, clear `DVR CONVERGENCE ERROR`.
-- **Coefficient sweep, round 2: potential/spectrum comparison + reuse validity check.** A second figure, `potential_comparison.png`, was added alongside the Cv comparison so a bigger anomaly can be visually correlated with the actual change in well shape that caused it — each variant's $V(x)$ + its own low-lying spectrum, zoomed on the well structure and colored to match the Cv plot's legend, falling back from side-by-side panels (≤6 variants) to one shared overlay (≤15) to one figure per variant (beyond that) as the variant count grows. Both figures moved into their own `coefficient_sweep/` folder, out of `cv/`. Separately, reusing the base run's `NUM_STATES` for every variant was checked for validity rather than assumed: by WKB scaling ($E_n\sim a^{1/3}n^{4/3}$ for a quartic well), sweeping a leading coefficient down (not up) can shrink a variant's own $E_{\max}$ below the same hot-end thermal-coverage margin `Cv_AutoTune.py` enforces for the base run, silently risking the very truncation artifact this project's auto-tuning exists to prevent. `solve_variant_with_hot_coverage` now checks that margin per variant and escalates that one variant's own `NUM_STATES` if needed (reusing the base run's own growth/cap/round-limit knobs), flagging (not discarding) a variant that still can't clear it after escalating.
-- **`beta_arr` switched from linear to log spacing.** A coefficient-sweep curve was reported as looking like connected straight-line segments rather than smooth near its high-$T$ end. Root cause: `Quantum_Classical_Combined.run()` built `beta_arr` with `np.linspace`, but `BETA_MIN`/`BETA_MAX` typically span more than a decade and every plot in the project displays $T=1/\beta$ on a log axis -- for the project's typical range, linear spacing put roughly 3 points across the whole $T=5$-$13$ decade versus roughly 150 with log spacing, visibly polygonal wherever a curve's transition happened to land in that stretch (a numerical/visualization artifact, not physics). `beta_arr` is now built with `np.geomspace`, matching the log-$T$ display convention everywhere it's used (Sections 4, 6, 7 all share this one array). `N_BETA` remains the knob to raise if a curve still looks under-resolved anywhere.
+These additions came while exploring the quartic/cubic/quadratic double well:
+
+- **Auto-tuning (`Cv_AutoTune.py`).** Sections 1 and 4 were merged into a closed loop that inspects the sweep's own diagnostics and grows `NUM_STATES` and the ξ-scan budget automatically. `BETA_MIN` gained an "auto" mode derived from $T_{\max}=10(E_1-E_0)/k_B$.
+- **Coefficient sweep (`Cv_Coefficient_Sweep.py`, Section 7).** Overlays several variants' quantum $C_v(T)$ (one coefficient swept). Originally they were drawn against the **base** potential's classical-limit curve; this changed in 2026, see below.
+  - Non-confining variants are caught and skipped instead of aborting the sweep. This also exposed and fixed a latent array-vs-scalar bug in `auto_configure_dvr`.
+  - A second figure, `potential_comparison.png`, was added.
+  - Reusing the base `NUM_STATES` for every variant was made safe by a per-variant hot-end coverage check (`solve_variant_with_hot_coverage`).
+- **Log-spaced temperatures.** `beta_arr` switched from `np.linspace` to `np.geomspace`. With linear spacing, curves looked polygonal near the hot end on the log-T plots.
+
+### October 2026: verifying the double-well "toy model" and correcting the classical limit
+
+**The trigger.** The double well $V=\tfrac14x^4+bx^3-\tfrac12x^2$ looked like a candidate toy model. In the coefficient-sweep plot, its quantum $C_v$ showed a Schottky-like bump that rose above the "classical limit" and grew with $|b|$. Before investing in it, a verification plan was drawn up:
+- code review;
+- reproduction of Hasegawa's double-well results;
+- analytic limits;
+- quantitative Schottky signatures;
+- a physical explanation.
+
+**First check: the classical limit itself.** Each b's classical limit was computed with the pipeline and compared with the exact classical heat capacity of the same potential, $C_v^{cl}/k_B=\tfrac12+\beta^2\mathrm{Var}(V)$ (the one-dimensional phase-space integral; see [`OPTION_A_physics.md`](audit/classical_limit/OPTION_A_physics.md)).
+- The pipeline's "classical limit" was a nearly flat ≈0.73 for every b.
+- The exact classical $C_v$ of the base potential runs from 1.00 up to 1.45 and back down to 0.71, and depends strongly on b.
+
+**The audit** (branch `correct-classical`, [`AUDIT.md`](audit/classical_limit/AUDIT.md)) found the cause:
+
+1. **Which half was missing.** The paper the method comes from (Gelbwaser-Klimovsky et al., SI-III/IV, Eq. S7) scales **the potential and the temperature together**, V → ξ²V and T → ξ²T, which is ħ → ħ/ξ. The pipeline reused the spectrum of the *unscaled* V at every ξ, i.e. it applied only T → ξ²T, so each scan point was simply the quantum $C_v$ at the hotter temperature ξ²T. Its "plateau" was the system's high-temperature value, the same at every T. A search of every file and of the whole git history confirmed that the potential was never scaled anywhere.
+2. **Why it went unnoticed.** Reusing the spectrum is exact precisely when every level gap scales by one common factor under V → ξ²V. That holds for the box (factor 1), the HO (factor ξ) and every |x|^k. It also holds only for those, which are exactly the systems whose classical $C_v$ does not depend on T.
+3. **Why the HO checks passed.** For the HO the old scan was *identical* to the correct one with ξ read as ξ², to 7e-14. Moreover:
+   - the HO's classical $C_v$ is the constant 1, so any method returning the high-T value passes;
+   - the "machine-precision" classical-limit figure compared the base and reference grids running the *same* algorithm (a self-comparison);
+   - the analytic HO benchmark only quantified the quantum curve.
+4. **The decisive test.** The Pöschl–Teller well $V_0\tan^2x$ has an exact spectrum for every ξ²V and an analytic, T-dependent classical $C_v$. On it the old scan failed by 0.47, while the paper's prescription, evaluated with the pipeline's own `compute_cv`, converged onto the exact answer (4× per doubling of ξ, the ħ² law).
+5. **Two smaller defects** in the same code:
+   - the plateau picker could take its value from the collapsing finite-N tail;
+   - when the ξ-scan failed, the quantum $C_v$ itself was stored as the "classical limit". In the HO validation run this was 90 of 500 points.
+
+**The correction.** All code changes below are described file by file in [`CHANGES.md`](audit/classical_limit/CHANGES.md).
+
+- **`Classical_Limit_Numerical.py`** was rewritten to follow the paper literally. At every ξ the DVR is **re-solved for ξ²V** and evaluated with the existing `compute_cv(E, β, ξ)`.
+  - One solve per ξ serves every temperature. A cache (`ScaledSpectra`) sizes each solve to cover $E_0+$ `HOT_STATE_SAFETY`·$k_BT$, so finite-N collapse can no longer occur.
+  - The plateau test uses the ħ² law to estimate each step's distance from the ξ → ∞ limit, and rejects "plateaus" below ½, the rigorous lower bound of the classical $C_v$. This stops the frozen-out regime at low T being mistaken for a plateau.
+  - The reported value is the last point of the verified plateau, which fixes the picker. A failed scan gives NaN with a warning, which removes the fallback.
+- **`DVR_Algorithm.auto_configure_dvr`** gained optional `energy_ceiling`, `turning_points` and `padding` arguments, with defaults unchanged. The scaled potentials need a different energy ceiling and a tighter starting window; the existing span-convergence loop and 3-pass check still validate every solve.
+- **`config.py`:** new ξ settings:
+  - `XI_START` = 1;
+  - `XI_MULT` = 1.25;
+  - `TOL_XI` = 2e-3, now a bound on the error of the classical value;
+  - `MAX_XI_STEPS` = 35;
+  - new hard cap `XI_MAX` = 2000.
+- **Callers:** `Quantum_Classical_Combined.run`, the Section 6 benchmark (whose classical reference now re-solves every ξ²V on refined grids), `Cv_AutoTune` (failures now map to the knob that controls them) and the master script were adapted.
+- **Docstrings:** `HO_Analytical`'s docstring, which described the classical limit as the T → ∞ value "by definition", was corrected.
+
+**Verification of the correction:**
+- **Against the exact classical $C_v$** (HO, x⁴ and the double well), the corrected scan converges at every temperature with errors ≤ 8.2e-4. Its own error estimate matches the true error to 6e-6.
+- **The full pipeline** runs end to end. In Section 6, the base and refined-grid classical curves agree to 5e-12.
+- **The audit**, now pinned to the pre-correction code, still reproduces its original results.
+
+**Section 7 gets per-variant classical curves.** With a correct classical limit, comparing every variant's quantum $C_v$ with the *base* potential's classical curve became visibly misleading: b = −0.9 and −0.7 appeared to rise "above classical". Each variant is now drawn against its **own** classical limit, computed with the same scan and settings (quantum solid, classical dashed, same color).
+
+**The answer for the toy model.** Run on all six variants (b = −0.9 … 0, 1000 temperatures, ~44 min; [`SECTION7_RESULTS.txt`](audit/classical_limit/SECTION7_RESULTS.txt)), every variant converged at every temperature.
+- For **every** b, the quantum $C_v$ stays below its own classical $C_v$ at every temperature, by about 1e-3 at closest, at the hottest temperatures.
+- The Schottky-like quantum bumps of b = −0.9 and −0.7 sit underneath taller classical peaks: those peaks come from a second region of configuration space opening up, and are not a quantum effect.
+
+As a candidate for "quantum $C_v$ above classical", this potential family, in this range of b, does not show the effect.
+
+**Section 6 cost and lighter grid factors (checked, not yet applied).** After the correction, Section 6's classical reference re-solves every ξ²V on a grid widened and refined by Section 2's factors (span×2, dx÷2). That took ~36 of the ~50 minutes of a full run. Lighter factors were measured on the full 1000-temperature grid ([`section6_grid_factor_check.py`](audit/classical_limit/section6_grid_factor_check.py), [`SECTION6_GRID_FACTORS.txt`](audit/classical_limit/SECTION6_GRID_FACTORS.txt)):
+
+| span / dx factor | reference sweep | largest grid | max relative difference to the base curve |
+|---|---|---|---|
+| 2 / 2 (current) | 36.3 min | 12,785 pts | 5.5e-12 |
+| 1.5 / 1.5 | 9.8 min | 7,192 pts | 5.4e-12 |
+| 1.25 / 1.25 | 5.7 min | 4,995 pts | 6.9e-12 |
+
+All three agree with the base at the round-off level. The classical curve is converged far beyond anything a factor can distinguish, so a lighter factor gives the same verification at a fraction of the cost. Applying it (as a separate classical-reference factor, keeping Section 2's cheap 2/2 for the spectrum) is pending a decision.
 
 ## Version History
 
-Pre-reorganization filenames carried explicit version suffixes (e.g. `DVR_Algorithm_1_4.py`); current files under `src/` no longer do (see [`README.md`](README.md) for the current structure). This table is kept as a historical record of the module-level changes that shaped the current design.
+Pre-reorganization filenames carried explicit version suffixes (e.g. `DVR_Algorithm_1_4.py`); current files no longer do. This table records the module-level changes that shaped the current design.
 
 | File | Version | Key change |
 |------|---------|-----------|
 | `DVR_Algorithm` | 1.3 | Hard-wall support removed; smooth-only |
 | `DVR_Algorithm` | 1.4 | Multiprocessing timer removed; replaced with inline per-pass timing |
 | `DVR_Algorithm` | 1.5 | Adaptive span-expansion loop added to `auto_configure_dvr`; `E_ceiling` reverted from an oversized temporary hack back to `1.5 * num_levels` |
+| `DVR_Algorithm` | 1.6 | Optional `energy_ceiling`, `turning_points`, `padding` in `auto_configure_dvr` (defaults unchanged), for the scaled potentials ξ²V |
 | `Classical_Limit_Numerical` | 1.0 | Extracted from the combined file; fully general |
+| `Classical_Limit_Numerical` | 2.0 | Classical-limit correction: ξ²V re-solved at every ξ (Eq. S7), ħ²-law error estimate, ½ lower bound, plateau picker fixed, no fallback |
 | `Quantum_Classical_Combined` | 1.9 | System-agnostic Cv pipeline; xi/n engine extracted |
+| `Quantum_Classical_Combined` | 2.0 | `run()` takes the potential; quantum Cv from the whole base spectrum; new ξ-diagnostic plot |
 | `DVR_Reference_Generator` | 1.0 | New: numerical reference grid generation, replacing the analytic formula as ground truth |
 | `DVR_Limit_Finder` | 1.0 | New: resolution and level-count limit searches |
 | `DVR_Limit_Finder` | 1.1 | $\Delta x$ replaces point count as the resolution-search axis |
 | `DVR_Limit_Finder` | 1.2 | Point annotations removed from the $\Delta x$ plot |
 | `Cv_Numerical_Benchmark` | 1.0 | New: base vs. reference Cv comparison (quantum + classical) |
+| `Cv_Numerical_Benchmark` | 1.1 | Classical reference re-solves every ξ²V on refined grids; data-scaled classical plot |
 | `HO_Energy_Level_Error` | 1.1 | Docstring clarified — function is fully generic |
 | `Quantum_HO_Master` | 1.5 | Analytical sections removed; fully numerical pipeline (numerical reference is now the sole ground truth for Sections 3, 5, 6) |
-| `Cv_AutoTune` | 1.0 | New: `BETA_MIN` auto-fill from $T_{\max}=10\Delta E/k_B$, and escalation diagnostics for the `NUM_STATES`/`XI_START` closed loop in `Quantum_HO_Master`'s merged Sections 1 & 4 |
+| `Cv_AutoTune` | 1.0 | New: `BETA_MIN` auto-fill from $T_{\max}=10\Delta E/k_B$, and escalation diagnostics for the `NUM_STATES`/`XI_START` closed loop |
+| `Cv_AutoTune` | 1.1 | Escalation mapped to the corrected scan: `NUM_STATES` for the quantum curve only, ξ ladder on `max_steps`; `xi_cap`/`dvr_failed` reported, not escalated |
 | `Cv_Coefficient_Sweep` | 1.0 | New: Section 7 coefficient-sweep comparison plot (quantum $C_v(T)$ per variant vs. the base run's reused classical limit) |
+| `Cv_Coefficient_Sweep` | 1.1 | Each variant drawn against its own classical limit (quantum solid, classical dashed, same color) |

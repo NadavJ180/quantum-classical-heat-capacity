@@ -151,7 +151,7 @@ Every error is below `TOL_XI` = 2e-3, and every value approaches the limit from 
   - Classical limit, base vs reference grids (span×2, dx÷2): max relative error **5.5e-12** over 1000/1000 temperatures, so the new classical curve is fully converged in the DVR grid.
   - Quantum Cv: max absolute error 8.5e-12.
   - Cost: **36 minutes**, because the reference's 33 solves reach 12,785 grid points. This is now the most expensive part of the run (see section 6 of this file).
-- **Section 7:** ran as before in 67 s. See the caveat in section 6 of this file.
+- **Section 7:** ran in 67 s, at that point still against the base potential's classical curve (`figures/corrected_run/cv_coefficient_sweep.png`, kept as a record). Superseded by per-variant classical curves (section 7a).
 
 What the figures show:
 - **`cv_summary.png`:** the classical curve is now 1.00 → 1.45 → 0.71, and the quantum curve lies below it at every T.
@@ -165,19 +165,57 @@ What the figures show:
 
 Because the reported value sits below the limit by almost exactly its estimate, adding the estimate back (Richardson extrapolation) would give the classical Cv to ~1e-5 at the same cost. It would also allow a looser `TOL_XI` and therefore fewer DVR solves. It changes the reported number from "computed" to "extrapolated", so it is your call.
 
-## 6. Deliberately not changed, and needs your decision
+## 6. Open items
 
-- **Section 7 (coefficient sweep) is now misleading in a new way.**
-  - It still plots every variant against the **base** potential's classical curve, as its title says ("shared classical limit reused from the base run"). That curve is now correct for b = −0.5.
-  - The b = −0.9 and −0.7 quantum curves therefore appear to rise above "the classical limit" at T ≈ 1.3–10 (`figures/corrected_run/cv_coefficient_sweep.png`). That is a comparison between different potentials. Each b has its own, quite different, classical curve. For example, the earlier quick calculation gave b = −0.9's own classical Cv as ≈ 1.36 at T = 3, above its quantum peak of ≈ 1.28.
-  - **Do not read that plot as a quantum excess.**
-  - Fixing it means one classical curve per variant: about 6 minutes each with the ξ-scaling, or about a second each with option A. I have not changed it.
-- **Section 6 cost.** The classical reference sweep takes ~36 minutes for the double well. Options:
-  - keep it;
-  - lighten it (e.g. reference factors 1.5 instead of 2 for the classical part only);
-  - make it optional with a config flag, relying on each ξ solve's own 3-pass check (or on option A) instead.
-- **Documentation outside `src/`:**
-  - `README.md`, `FINDINGS.md` (section "The Classical Limit and the ξ-Scaling Trick", the "ξ-convergence diagnostic" row of the diagnostics table, and the Troubleshooting entries about `XI_START` and finite-N collapse) and `HISTORY.md` describe the old method.
-  - `docs/summaries/IEEE_Summary.tex` lines 77, 182 and 198 do too. It is synced with Overleaf, and you write it yourself.
+- **Section 6 cost.** Measured, not yet applied (section 7c). A lighter classical-reference factor gives the same verification in a fraction of the time.
+- **`docs/summaries/IEEE_Summary.tex`** lines 77, 182 and 198 still describe the old method. It is synced with Overleaf, and you write it yourself.
 - **`verification/classical_limit/`** (the paused toy-model check) was written against the old API and has not been updated.
-- **Figures** under `figures/` were not regenerated. The verification run wrote its figures to a scratch folder so your committed figures stay as they are.
+- **Figures** under `figures/` were not regenerated. The runs wrote their figures to a scratch folder, and copies are kept in `figures/corrected_run/` here.
+
+## 7. Follow-up: per-variant classical curves, documentation, Section 6 factors
+
+### 7a. Section 7 compares each variant with its own classical limit
+
+**`src/Cv_Coefficient_Sweep.py`**
+- **Computation.** `run_coefficient_sweep` now computes every variant's classical limit with the same corrected ξ-scan and the base run's settings (new helper `_variant_classical_limit`). It takes new arguments `xi_start`, `tol_xi`, `min_stable_xi`, `xi_multiplier`, `max_xi_steps`, `xi_max`, `tol_cv`, `min_stable_n`.
+  - The base variant reuses the base run's curve, since it is the identical computation.
+  - A variant whose classical scan fails is kept, with gaps in its curve and a † in the legend, instead of aborting the sweep.
+  - The result also returns `variant_classical` and `classical_incomplete`.
+- **Plot.** `plot_coefficient_sweep` draws each variant's quantum $C_v$ solid and its own classical limit dashed, in the same color. The legend sits outside the axes, with one entry per variant plus two neutral entries for the line styles. The title states the convention.
+- **Docstring.** The module docstring's "why no ξ/n search here" section became "each variant gets its own classical limit".
+
+**`src/Quantum_HO_Master.py`** passes the base run's final ξ settings to Section 7 and updates the Section 7 comments. All four of its calls into the changed functions were checked to bind to the new signatures.
+
+**Run** ([`SECTION7_RESULTS.txt`](SECTION7_RESULTS.txt), [`figures/corrected_run/cv_coefficient_sweep_own_classical.png`](figures/corrected_run/cv_coefficient_sweep_own_classical.png)): Sections 1 & 4 + Section 7 exactly as the master calls them, 1000 temperatures, ~44 min.
+- All six variants converged at all temperatures.
+- **For every b the quantum $C_v$ stays below its own classical $C_v$ at every temperature** (closest at the hottest T, by about 1e-3).
+- The quantum peaks of b = −0.9 and −0.7 (1.28 and 1.13) sit below classical peaks of 1.42 and 1.43.
+- b = −0.9 needed ξ up to ≈1972, the last rung of the default ladder. It converged, but with no margin.
+
+### 7b. Documentation
+
+- **`README.md`:** rewritten to describe only the current pipeline: the classical-limit method, the new auto-tuning logic, Section 6's classical reference, Section 7's per-variant curves, runtimes, and running a new potential.
+- **`FINDINGS.md`:** updated physics, diagnostics, parameters and troubleshooting.
+  - The classical limit is now explained from its definition and the exact phase-space formula; the ξ-scaling, the ħ² error estimate and the ½ bound are covered.
+  - Results now include the classical-limit verification, the base double well, the per-variant table and the Section 6 factor measurements.
+  - The ξ-diagnostic and coefficient-sweep plot descriptions match the new figures.
+  - The troubleshooting covers the NaN stop reasons (`max_steps`, `xi_cap`, `dvr_failed`).
+- **`HISTORY.md`:** a new chapter tells the October 2026 process: the toy-model verification plan, the first check, the audit and why the HO validation could not catch the defect, the correction, its verification, the per-variant Section 7 and its result, and the Section 6 factor check. Earlier entries are kept as history, annotated where the correction made them obsolete. The version table has new rows for every changed module.
+- **Not touched:** the `.tex` files.
+
+### 7c. Can Section 6 use lighter grid factors?
+
+**Yes.** Measured on the full 1000-temperature grid ([`section6_grid_factor_check.py`](section6_grid_factor_check.py), [`SECTION6_GRID_FACTORS.txt`](SECTION6_GRID_FACTORS.txt), [`figures/section6_grid_factors.png`](figures/section6_grid_factors.png)):
+
+| span / dx factor | reference sweep | largest grid | max relative difference to base | mean |
+|---|---|---|---|---|
+| 2 / 2 (current) | 36.3 min | 12,785 pts | 5.5e-12 | 2.4e-13 |
+| 1.5 / 1.5 | 9.8 min | 7,192 pts | 5.4e-12 | 2.0e-13 |
+| 1.25 / 1.25 | 5.7 min | 4,995 pts | 6.9e-12 | 1.9e-13 |
+
+**Interpretation.**
+- **All three show the same thing.** Every reference agrees with the base curve at the round-off level, ~1e-12 at the cold end, where energies of ξ²V are ~10⁶ times larger, and ~1e-13 at the hot end. Every factor shows the same fact: the base classical curve is converged in the grid.
+- **The figures would not change.** The curves in Section 6's figure are indistinguishable, and its error panel would show the same ~1e-12 profile.
+- **A lighter reference is still a real test.** It still changes both the span and the spacing of every solve. Because DVR errors fall exponentially with resolution and span, an under-resolved base solve would still show up as a visible difference.
+
+**Suggested change (not applied).** Add a separate pair `CLASSICAL_REFERENCE_SPAN_FACTOR`/`CLASSICAL_REFERENCE_DX_FACTOR` = 1.5/1.5, a 3.7× speed-up with comfortable margin, or 1.25/1.25 for 6.4×. Keep Section 2's 2/2 for the spectrum reference, which costs under a minute.

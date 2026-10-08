@@ -1,10 +1,21 @@
 # Quantum-Classical Heat Capacity
 
-A modular, system-agnostic numerical pipeline for computing the heat capacity $C_v(T)$ of a quantum particle in a smooth 1-D potential, and locating its classical limit, using the Discrete Variable Representation (DVR) method. The pipeline validates itself without ever depending on a closed-form solution: every result is checked against an independently generated, higher-resolution numerical reference rather than an analytic formula — the same check that will be needed once the project moves to potentials that have no closed-form answer at all.
+A modular, system-agnostic numerical pipeline for the heat capacity $C_v(T)$ of a quantum particle in a smooth, confining 1-D potential, and for its classical limit.
 
-**Status:** The harmonic oscillator (HO) is fully validated, reproducing the exact analytic result to machine precision. The pipeline is now being extended to a quartic double well.
+- **Quantum $C_v(T)$:** computed from an energy spectrum obtained with the Discrete Variable Representation (DVR).
+- **Classical limit:** found with the ξ-scaling of Gelbwaser-Klimovsky et al.: scale the potential and the temperature together, V → ξ²V and T → ξ²T, re-solve the Schrödinger equation for ξ²V at every ξ, and follow $C_v$ to its plateau. This is ħ → ħ/ξ at fixed V and T.
+- **Self-validating:** every result is checked against an independently generated, higher-resolution numerical reference rather than a closed-form formula, so the same checks work for potentials with no analytic solution.
 
-For the full write-up — theory, validation strategy, results, and derivations — see [`docs/summaries/IEEE_Summary.tex`](docs/summaries/IEEE_Summary.tex) (the project's IEEE-style report). For a technical summary of the physics and how to read the diagnostic plots, see [`FINDINGS.md`](FINDINGS.md). For how the pipeline evolved over the semester, see [`HISTORY.md`](HISTORY.md). Meeting-by-meeting notes and worked derivations are in [`docs/summaries/Meetings_Summary.tex`](docs/summaries/Meetings_Summary.tex).
+**Status:**
+- The harmonic oscillator (HO) is validated against its exact solution.
+- The classical limit is verified against the exact classical heat capacity (HO, $x^4$, and the double well) to better than $10^{-3}$.
+- The pipeline currently runs on the quartic/cubic/quadratic double well of `src/config.py`.
+
+Other documents:
+- [`FINDINGS.md`](FINDINGS.md): the physics behind each step, how to read the diagnostic plots, and current results.
+- [`HISTORY.md`](HISTORY.md): how the pipeline got here, including the classical-limit correction.
+- [`audit/classical_limit/`](audit/classical_limit/): the audit, the change log and the verification scripts for that correction.
+- [`docs/summaries/IEEE_Summary.tex`](docs/summaries/IEEE_Summary.tex) (the project report) and [`docs/summaries/Meetings_Summary.tex`](docs/summaries/Meetings_Summary.tex) (meeting notes and derivations). The report still describes the classical-limit method as it was before the correction.
 
 ---
 
@@ -14,103 +25,139 @@ For the full write-up — theory, validation strategy, results, and derivations 
 src/
 ├── config.py                     Single source of truth: potential, constants, control parameters
 ├── Quantum_HO_Master.py          Master driver — entry point, runs the full 7-section pipeline
-├── Quantum_Classical_Combined.py General Cv pipeline (quantum Cv(T) + classical-limit scan)
-├── Classical_Limit_Numerical.py  xi/n convergence engine (classical-limit search)
-├── Cv_Numerical_Benchmark.py     Cv comparison: base grid vs. numerical reference
-├── Cv_AutoTune.py                BETA_MIN auto-fill + NUM_STATES/XI_START escalation diagnostics (see "Auto-Tuning" below)
-├── Cv_Coefficient_Sweep.py       Quantum Cv(T) comparison across a swept POTENTIAL_PARAMS coefficient (see "Coefficient Sweep" below)
+├── Quantum_Classical_Combined.py Cv pipeline for one potential: quantum Cv(T) + classical limit + plots
+├── Classical_Limit_Numerical.py  Classical-limit engine: xi-ladder, DVR re-solve of xi^2 V per xi,
+│                                 plateau detection with error estimate, n-convergence check
+├── Cv_Numerical_Benchmark.py     Cv comparison: base grid vs. numerical reference (quantum + classical)
+├── Cv_AutoTune.py                BETA_MIN auto-fill + escalation diagnostics (see "Auto-Tuning")
+├── Cv_Coefficient_Sweep.py       Quantum and own classical Cv(T) across a swept coefficient (see "Coefficient Sweep")
 ├── DVR/
 │   ├── DVR_Algorithm.py          Core DVR solver and automatic grid configuration
 │   ├── DVR_Reference_Generator.py  Numerical reference grid generator
-│   └── DVR_Limit_Finder.py       DVR accuracy limit searches (resolution and level-count)
+│   └── DVR_Limit_Finder.py       DVR accuracy limit searches (resolution and level count)
 ├── analytical/
 │   ├── HO_Analytical.py          Closed-form HO energy levels and Cv(T)
 │   └── HO_Benchmark.py           External benchmark: numerical pipeline vs. analytic HO
 ├── error/
 │   └── error_energylevels.py     Energy-level comparison (base vs. reference)
 └── figures/
-    ├── output_paths.py           Figure save-path resolver (see "Figure Output" below)
-    ├── plot_potential.py         Potential-shape figure generator (called from Quantum_HO_Master.py's
-    │                             Section 1 automatically; run standalone only if you want just this figure)
+    ├── output_paths.py           Figure save-path resolver (see "Figure Output")
+    ├── plot_potential.py         Potential-shape figures (called from Section 1 automatically)
     └── pipeline_diagram.py       Workflow-diagram generator
 
-figures/            Generated plots -- see "Figure Output" below for how a run's plots are
-                    organized under here. HO/ and SymmetricDoubleWell/ [name predates the
-                    b != 0 run in config.py, so that potential is currently asymmetric] are
-                    older, hand-saved figures kept because docs/summaries/IEEE_Summary.tex
-                    references them directly; new runs no longer write into either folder.
-docs/summaries/      IEEE_Summary.tex (main report), Meetings_Summary.tex (meeting notes + derivations)
-docs/SchottkyAnomaly/  Reference literature (Schottky-anomaly papers)
+audit/classical_limit/   Audit of the pre-correction classical limit, the correction's change log,
+                         the physics of the exact classical heat capacity, and verification scripts
+figures/                 Generated plots (see "Figure Output"). HO/ and SymmetricDoubleWell/ are
+                         hand-saved figures referenced directly by IEEE_Summary.tex; runs no longer
+                         write into them.
+docs/summaries/          IEEE_Summary.tex (report), Meetings_Summary.tex (meeting notes + derivations)
 ```
+
+## Pipeline Overview
+
+`Quantum_HO_Master.py` runs seven sections, all driven by the single potential defined in `config.py`. Section numbers keep their original roles; 1 and 4 form one auto-tuned loop.
+
+1. **& 4. DVR base solve + Cv pipeline (auto-tuned).**
+   - Solves for the lowest `NUM_STATES` levels on an automatically configured grid and computes the quantum $C_v(T)$ from them.
+   - Computes the classical limit at every temperature with the ξ-scan (see "Classical Limit").
+   - After each round, `Cv_AutoTune.diagnose_escalation` checks the results and grows `NUM_STATES` and/or the ξ ladder if needed, up to `MAX_ESCALATION_ROUNDS` (see "Auto-Tuning").
+   - Saves the potential-shape figures once the loop settles.
+2. **Numerical reference solve.** The same spectrum on an independently wider and finer grid (`REFERENCE_SPAN_FACTOR`, `REFERENCE_DX_FACTOR`), used as ground truth by the later sections.
+3. **Energy-level accuracy.** Base vs. reference eigenvalues, absolute and relative error.
+5. **DVR limit analysis.** The solver's own resolution (Δx) and level-count (n) breakdown points, measured against the reference.
+6. **Cv numerical benchmark.**
+   - Quantum $C_v$ from the reference spectrum.
+   - Classical limit re-computed with every ξ²V solve on a grid widened and refined by the same reference factors.
+   - Both compared with Section 4.
+7. **Coefficient sweep.** Several variants of the base potential that differ in one coefficient. Each variant's quantum $C_v(T)$ is plotted against its own classical limit (see "Coefficient Sweep").
+
+Only the potential block of `config.py` needs editing to run on a new potential.
+
+**Runtime (double well, default settings):**
+
+| part | time |
+|---|---|
+| Sections 1 & 4 | ~7 min, of which ~6.5 min is the classical limit (~33 DVR solves of ξ²V) |
+| Section 6 | ~36 min (the reference classical sweep on 4×-point grids) |
+| Section 7 | ~6–8 min per non-base variant (one classical sweep each); ~44 min for the default six-variant sweep |
+
+## Classical Limit
+
+The classical limit is $C_v$ as ħ → 0 with the potential and the temperature held fixed. Following Gelbwaser-Klimovsky et al. (Eq. S7: $E_n(\hbar,\xi^2V)=\xi^2E_n(\hbar/\xi,V)$), it is reached by scaling the potential and the temperature together:
+
+1. **The ladder:** ξ = `XI_START`·`XI_MULT`^k, never above `XI_MAX`.
+2. **Each rung:** the DVR is solved for **ξ²V**, and $C_v$ is evaluated at ξ²T (`compute_cv(E_n(ξ²V), β, ξ)`). One solve per ξ serves every temperature, and each solve keeps the levels needed up to $E_0 + $ `HOT_STATE_SAFETY`·$k_BT$, so the result is never truncation-limited.
+3. **Plateau test:** quantum corrections shrink as 1/ξ², so each step's distance from the ξ → ∞ limit is estimated as $|\Delta C_v|/(\text{XI\_MULT}^2-1)$.
+   - A step is stable when that estimate is below `TOL_XI` and $C_v \ge \tfrac12 - $ `TOL_XI` (the classical $C_v$ can never be below ½).
+   - `MIN_STABLE_XI` consecutive stable steps form the plateau. The last point is reported, together with its error estimate.
+4. **Failure:** if the ladder runs out, hits `XI_MAX`, or a DVR solve fails, that temperature's classical limit is NaN and a warning is printed.
+5. **Companion check:** an n-scan on the converged ξ's spectrum confirms the value doesn't depend on truncation.
+
+The ξ-convergence diagnostic plot shows this scan at the hardest temperature: a frozen-out region, a rise, then the verified plateau. See [`FINDINGS.md`](FINDINGS.md) for the physics and [`audit/classical_limit/OPTION_A_physics.md`](audit/classical_limit/OPTION_A_physics.md) for the exact classical formula $C_v^{cl}/k_B = \tfrac12 + \beta^2\mathrm{Var}(V)$ that this limit converges to.
+
+## Auto-Tuning
+
+The temperature range (`BETA_MAX`, and optionally `BETA_MIN`) is meant to be the only knob you change from run to run.
+
+- **`BETA_MIN`:** leave it as `None` and it is derived from $T_{\max}=10\,(E_1-E_0)/k_B$, a practical "T → ∞" point. Set a float to choose the hot end yourself.
+- **`NUM_STATES`** controls only the quantum curve. It grows (`NUM_STATES_GROWTH`, capped by `NUM_STATES_CAP`) when the base spectrum's top level would be thermally accessible at the hottest temperature, $E_{\max} < $ `HOT_STATE_SAFETY`·$k_BT_{\text{hot}}$.
+- **The ξ ladder** (`XI_START`, `MAX_XI_STEPS`) grows (`XI_START_GROWTH`, `MAX_XI_STEPS_GROWTH`) when more than `ESCALATION_FRACTION_THRESHOLD` of the temperatures ran out of ladder before reaching a plateau.
+  - A scan stopped by the hard cap `XI_MAX`, or by a failed DVR solve, is **not** escalated. It is reported with a warning.
+  - Raising `XI_MAX` is a deliberate cost decision, because grid sizes grow with ξ.
+- Escalation is bounded by `MAX_ESCALATION_ROUNDS`. If the diagnostics still fail at the last round, a `UserWarning` is printed and the last attempt is used.
+- The cache of ξ²V solves is reused across rounds, so a round that only grows `NUM_STATES` repeats no classical solve.
+- `AUTO_ESCALATE = False` runs a single pass with the config values.
+
+## Coefficient Sweep
+
+Section 7 varies one coefficient of the current potential (e.g. the double well's cubic term `b`) and produces two figures in their own `coefficient_sweep/` folder:
+
+- **`cv_coefficient_sweep.png`:** for every variant, its quantum $C_v(T)$ (solid) and **its own classical limit** (dashed), in the same color. Each quantum curve is therefore compared only with the classical curve of the same potential; the classical $C_v$ itself depends strongly on the coefficient.
+  - Every classical curve is computed with the same ξ-scan and settings as the base run. The base variant reuses the base curve.
+  - The legend lists each variant (with its $E_1-E_0$ gap) plus the two line styles. The title shows the potential's formula with the swept coefficient symbolic.
+- **`potential_comparison.png`** (or one file per variant): each variant's $V(x)$ with its low-lying spectrum, zoomed on the well's structure and colored to match the Cv plot.
+  - With up to 6 variants: side-by-side panels.
+  - With up to 15: one overlay of the $V(x)$ curves.
+  - Beyond that: one figure per variant (`potential_<param>_<value>.png`).
+
+Config knobs:
+- `SCAN_PARAM`: the `POTENTIAL_PARAMS` key to vary.
+- `SCAN_STEP`: the spacing between variants.
+- `SCAN_COUNT`: the number of extra variants on each side of the base value (the base is always included).
+- `SCAN_SYMMETRIC_VALUE`: a value that recovers the symmetric potential, added as an extra reference variant if not already in the sweep; `None` disables it.
+- `POTENTIAL_FORMULA`: the formula template for the plot title, with `<<name>>` placeholders, one per additive term (see `format_potential_formula`).
+
+Behaviors to know:
+- **Mirror pairs:** for a potential whose odd-degree terms are the only symmetry breakers (like `b x³`), +b and −b are mirror images with identical spectra, so their curves coincide exactly.
+- **Failed variants:** a variant whose potential is not confining (its DVR solve fails) is skipped with a diagnosis instead of aborting the sweep. A variant whose classical scan fails at some temperatures is kept, with gaps in its dashed curve and a † in the legend.
+- **Per-variant NUM_STATES:** each variant's `NUM_STATES` is checked against the same hot-end coverage criterion as the base run and escalated per variant if needed. A variant that still falls short is flagged with `*` (see `Cv_Coefficient_Sweep.py`'s docstring).
 
 ## Figure Output
 
-Every figure the pipeline saves is written under:
+Every figure the pipeline saves is written to
 
 ```
 figures/<system>/<params>/<category>/<name>.png
 ```
 
-- `<system>` — a slug of `SYSTEM_NAME` (e.g. `1_d_asymmetric_double_well`).
-- `<params>` — a slug of `POTENTIAL_PARAMS` (e.g. `a-0p25_b-m0p5_c-m0p5_d-0` for `{"a": 0.25, "b": -0.5, "c": -0.5, "d": 0.0}`), so that two runs of the *same* potential with *different* parameters never collide or overwrite each other. This is what makes a future bulk scan — e.g. sweeping the double well's `b` over a range of values — safe to run unattended: each parameter combination lands in its own folder automatically, with no manual bookkeeping.
-- `<category>` — one of `energy_levels` (also where `plot_potential.py`'s two potential-shape figures land — `potential_full_spectrum.png`, zoomed just enough to show every computed level, and `potential_zoomed.png`, zoomed tightly on the well's own minima so its shape is actually visible even at the cost of most levels falling outside the frame), `convergence`, `cv` (the quantum/classical Cv summary and every base-vs-reference or vs-analytic Cv benchmark — kept together rather than split by comparison source), `dvr_limits`, or `coefficient_sweep` (Section 7's own folder — see "Coefficient Sweep" below; kept separate from `cv`/`energy_levels` since these figures compare several potentials against each other rather than diagnosing the base run) — matching the diagnostic categories in [`FINDINGS.md`](FINDINGS.md#reading-the-diagnostic-plots).
+- **`<system>`:** a slug of `SYSTEM_NAME`.
+- **`<params>`:** a slug of `POTENTIAL_PARAMS`, e.g. `a-0p25_b-m0p5_c-m0p5_d-0`. Runs with different parameters never overwrite each other.
+- **`<category>`:** one of
+  - `energy_levels` (including the two potential-shape figures),
+  - `convergence` (ξ- and n-convergence diagnostics),
+  - `cv` (the Cv summary and all Cv benchmarks),
+  - `dvr_limits`,
+  - `coefficient_sweep` (Section 7).
 
-Every path component and figure filename is built only from `[A-Za-z0-9_-]` — no spaces, dots, commas, or `=` signs — so the whole `figures/` tree is safe to point `\graphicspath`/`\includegraphics` at directly, or copy wholesale into a LaTeX project's figures folder, with no renaming. A value's sign and decimal point survive as letters instead of being stripped (`-` → `m`, `.` → `p`), so `b=-0.5` and `b=0.5` still land in distinct folders (`b-m0p5` vs. `b-0p5`) rather than colliding.
+All path components use only `[A-Za-z0-9_-]` (`-` → `m`, `.` → `p`), so the tree can be used directly from LaTeX. Paths are set by [`src/figures/output_paths.py`](src/figures/output_paths.py): a driver calls `set_context(SYSTEM_NAME, POTENTIAL_PARAMS)` once, and every plotting function calls `save_figure(fig, category, name)`, which saves and closes the figure (there is no `plt.show()` anywhere). The workflow diagram (`pipeline_diagram.py`) is saved to `figures/fig_pipeline.png`.
 
-This is implemented in [`src/figures/output_paths.py`](src/figures/output_paths.py). A driver script calls `set_context(SYSTEM_NAME, POTENTIAL_PARAMS)` once near the start of a run (`Quantum_HO_Master.py` and `plot_potential.py` both do this already); every plotting function then calls `save_figure(fig, category, name)` once its figure is finished. There is no `plt.show()` anywhere in the pipeline — `save_figure` saves the PNG and closes the figure immediately, so a run never blocks on a plot window and a long or bulk run never accumulates open figures. A re-run with identical parameters overwrites its own previous figures in place; a run with different parameters gets a fresh folder. A bulk-scan driver should call `set_context(...)` again at the top of each loop iteration, before that iteration's pipeline runs.
+## Running on a New Potential
 
-The hand-authored `fig_pipeline.png` workflow diagram (`src/figures/pipeline_diagram.py`) is not tied to any particular run and is saved directly to `figures/fig_pipeline.png`, unaffected by this scheme.
-
-## Pipeline Overview
-
-`Quantum_HO_Master.py` runs seven sequential sections, all driven by the single potential defined in `config.py`:
-
-1. **& 4. DVR base solve + Cv pipeline (auto-tuned)** — solves for the lowest `NUM_STATES` energy levels on an automatically configured grid, then runs the full quantum $C_v(T)$ + $\xi$/$n$-convergence classical-limit sweep, in a closed loop: after each attempt, `Cv_AutoTune.diagnose_escalation` inspects the sweep's own convergence diagnostics for the two known truncation artifacts (see "Auto-Tuning" below) and grows `NUM_STATES` and/or `XI_START`/`MAX_XI_STEPS` before retrying, up to `MAX_ESCALATION_ROUNDS`. Also saves the two potential-shape figures (`V(x)` with the computed spectrum overlaid — see `plot_potential.py`) once the loop settles.
-2. **Numerical reference solve** — the same spectrum on an independently wider/finer grid, generated once and shared by every later step as the ground truth.
-3. **Energy-level accuracy** — base vs. reference eigenvalues, absolute and relative error.
-5. **DVR limit analysis** — the DVR solver's own resolution ($\Delta x$) and level-count ($n$) breakdown points, measured against the reference.
-6. **Cv numerical benchmark** — the full Cv pipeline re-run on the reference spectrum, closing the loop between eigenvalue accuracy and the final thermodynamic observable.
-7. **Coefficient sweep** — the quantum $C_v(T)$ curves of several variants of the base potential (differing only in one named `POTENTIAL_PARAMS` coefficient) plotted against the base run's classical-limit curve — see "Coefficient Sweep" below.
-
-(Sections are numbered to match their original six-section role; 1 and 4 are merged into one auto-tuned loop rather than run back-to-back as fixed, single-shot steps.)
-
-Only Section 0 of `config.py` needs editing to run on a new potential — no other file changes.
-
-## Auto-Tuning
-
-The temperature range (`BETA_MAX`, and optionally `BETA_MIN`) is meant to be the only knob you touch run to run. Two numerical control parameters that the correctness of $C_v(T)$ actually depends on — `NUM_STATES` and the $\xi$-scan (`XI_START`/`MAX_XI_STEPS`) — are handled automatically instead:
-
-- **`BETA_MIN`** — leave it as `None` (the default) and Section 1/4's loop derives it from `T_max = 10 \Delta E / k_B`, where $\Delta E = E_1 - E_0$ is the spectrum's fundamental gap: a practical "$T\to\infty$" checkpoint by which the classical-limit plateau should already be reached (not a hard limit — see [`Cv_AutoTune.py`](src/Cv_AutoTune.py)). Set it to a float instead to hand-pick the hot end, e.g. to zoom into a specific temperature window.
-- **`NUM_STATES`/`XI_START`/`MAX_XI_STEPS`** — the values in `config.py` are only a round-0 starting guess. After each attempt, `diagnose_escalation` checks the sweep's own diagnostics on the matching half of the temperature range (hot half → `NUM_STATES`, per FINDINGS.md's "increase NUM_STATES" guidance for a truncated partition sum / numerical Schottky anomaly at high T; cold half → `XI_START`/`MAX_XI_STEPS`, per its "increase XI_START" guidance for a classical limit that drops because the $\xi$-scan ran out of budget at low T) and grows the relevant knob(s) before retrying.
-- Escalation is bounded by `MAX_ESCALATION_ROUNDS` (default 4); if it's still failing at the last round, a `UserWarning` is printed and the pipeline proceeds with the last attempt rather than looping forever. Growth factors (`NUM_STATES_GROWTH`, `XI_START_GROWTH`, `MAX_XI_STEPS_GROWTH`, `NUM_STATES_CAP`) and the escalation trigger thresholds (`HOT_STATE_SAFETY`, `ESCALATION_FRACTION_THRESHOLD`) are all in `config.py`, meant to be touched rarely if ever.
-- Set `AUTO_ESCALATE = False` to disable the loop entirely and run a single pass with the config's starting values, as before.
-
-## Coefficient Sweep
-
-To see how one coefficient of the current potential affects the shape of $C_v(T)$ (e.g. the double well's cubic term `b` and the size of its Schottky-anomaly-like bump), Section 7 sweeps that coefficient and produces two figures, both under their own `coefficient_sweep/` folder (see "Figure Output" above):
-
-- **`cv_coefficient_sweep.png`** — every variant's quantum $C_v(T)$ against the base run's classical limit, in one figure — no xi/n-convergence search is redone per variant, and no other diagnostics are added to this plot. Titled with the potential's actual formula (`config.POTENTIAL_FORMULA`), the fixed coefficients shown as their numeric values and the swept one shown symbolically (e.g. `V(x) = 0.25x⁴ + bx³ -0.5x² +0x`).
-- **`potential_comparison.png`** (or one file per variant, see below) — each variant's $V(x)$ with its own low-lying spectrum overlaid, zoomed on the well's own structure (the same view `plot_potential.py`'s "zoomed" figure uses) — this is what lets a Cv anomaly's size be correlated with the actual change in well shape/barrier/asymmetry that produced it. Colors match the Cv plot's legend so a curve and its potential are easy to cross-reference, and the title carries the same formula annotation as the Cv plot (symbolic in the swept coefficient) so the figure is self-documenting on its own. Every label — panel titles, the formula, filenames — is driven entirely by `scan_param`, so switching `SCAN_PARAM` to a different coefficient needs no changes here. Falls back through three layouts as the variant count grows, since a fixed layout can't stay readable at every count: side-by-side subplots (≤6 variants, most detail) → one shared overlay of just the $V(x)$ curves, no individual levels (≤15 variants) → one separate figure per variant (`potential_<param>_<value>.png`, beyond 15 — each titled with its own fully-numeric formula, since each figure is exactly one concrete potential rather than a family).
-
-Config knobs:
-- `SCAN_PARAM` — which key of `POTENTIAL_PARAMS` to vary (must be a real key of that dict).
-- `SCAN_STEP` — spacing between consecutive variants.
-- `SCAN_COUNT` — how many *extra* variants to add on each side of the value already in `config.py`, so the base potential is always included as one of the curves. Total curves plotted = `2*SCAN_COUNT + 1`.
-- `POTENTIAL_FORMULA` — a template for the Cv plot's formula annotation, written alongside `my_potential`/`POTENTIAL_PARAMS` in `config.py` and kept in sync with it by hand (same as `SYSTEM_NAME`/`T_UNITS_LABEL`). Uses `<<name>>` placeholder tokens (not Python's `{name}`) keyed by `POTENTIAL_PARAMS`' own keys, one per additive term, so they never collide with LaTeX's own braces — see `Cv_Coefficient_Sweep.format_potential_formula`. `None`, or a template with no `<<...>>` tokens at all, is fine for a potential whose formula doesn't decompose into one additive term per coefficient (e.g. the harmonic oscillator's `½mω²x²`).
-
-Note: for a potential where only odd-degree terms break the $x\to-x$ symmetry (like the double well's `b x^3`), coefficient values equidistant from 0 in opposite signs (`+b`, `-b`) give mirror-image potentials with *identical* energy spectra and therefore identical $C_v(T)$ curves — if your swept range straddles such a pair, one curve will sit exactly underneath the other. This is real physics, not a bug.
-
-**If a variant doesn't converge at all:** not every coefficient value produces a genuinely confining potential (e.g. a quartic leading coefficient that goes negative is unbounded from below). Section 7 catches that per variant rather than aborting the whole sweep: it prints the exception plus a cheap, potential-agnostic diagnosis (samples $V(x)$ far from the origin and checks it actually rises there — see `Cv_Coefficient_Sweep._diagnose_variant_failure`), omits that one coefficient value from both figures, and still produces them from whichever variants did converge (or, if every variant fails, a Cv figure showing just the classical-limit reference and no potential-comparison figure), plus a printed summary of which values were omitted.
-
-**Is it valid to reuse the base run's `NUM_STATES` for every variant?** Mostly, but not unconditionally — and Section 7 checks for the one way it can fail rather than assuming it's always fine. A direct quantum $C_v(T)$ evaluation from a truncated spectrum is exact as long as $E_{\max} - E_0 \gg k_BT_{\text{hot}}$ (the same criterion `Cv_AutoTune.py` uses for the base run). `NUM_STATES` was chosen to satisfy this for the *base* potential; by WKB scaling for a quartic well ($E_n \sim a^{1/3}n^{4/3}$), sweeping a leading coefficient *up* only makes that choice more conservative, but sweeping it *down* shrinks $E_{\max}$ for the same level count and could reproduce the same truncation artifact `Cv_AutoTune.py` exists to prevent, silently. `solve_variant_with_hot_coverage` closes that gap: it checks the same criterion for every variant's own spectrum and escalates that one variant's own `NUM_STATES` (reusing `HOT_STATE_SAFETY`/`NUM_STATES_GROWTH`/`NUM_STATES_CAP`/`MAX_ESCALATION_ROUNDS`, the same knobs as the base run) if needed. A variant that still can't clear the bar after escalating is kept — its low/mid-$T$ behavior, where the anomaly actually shows, is normally unaffected by hot-end truncation — but flagged with a `*` in the Cv plot's legend and a console warning rather than silently trusted. See `Cv_Coefficient_Sweep.py`'s module docstring for the full derivation.
-
-## Generalising to a New Potential
-
-1. Edit `POTENTIAL_PARAMS` and `my_potential(x)` in `src/config.py` to the new $V(x)$ (must be finite everywhere — no hard walls). `my_potential` should read its coefficients from `POTENTIAL_PARAMS` rather than hard-coding them twice, since that dict is also what names each run's figure folder (see "Figure Output" above).
-2. Update `SYSTEM_NAME` and `T_UNITS_LABEL` for plot labelling.
-3. Adjust `NUM_STATES` and `BETA_MAX` for the new system's energy scale — leave `BETA_MIN` as `None` unless you want to hand-pick the hot end (see "Auto-Tuning" above), and leave `XI_START` at its default; both are escalated automatically if the sweep shows a truncation artifact.
-4. Optionally set `SCAN_PARAM`/`SCAN_STEP`/`SCAN_COUNT` to whichever coefficient you want the Section 7 comparison plot to vary.
-5. Run `src/Quantum_HO_Master.py` — the grid auto-configurator, reference generator, and auto-tune loop all adapt automatically.
+1. In `src/config.py`, set `POTENTIAL_PARAMS` and `my_potential(x)`. The potential must be finite everywhere (no hard walls) and confining. `my_potential` should read its coefficients from `POTENTIAL_PARAMS`, which also names the figure folder.
+2. Update `SYSTEM_NAME`, `T_UNITS_LABEL` and `POTENTIAL_FORMULA`.
+3. Set `BETA_MAX` (the cold end) for the new energy scale, and `NUM_STATES` as a starting guess. Leave `BETA_MIN = None` and the ξ settings at their defaults; the auto-tune loop adjusts them.
+4. Optionally set `SCAN_PARAM`/`SCAN_STEP`/`SCAN_COUNT` for Section 7.
+5. Run `python src/Quantum_HO_Master.py`. Use the Anaconda Python 3.7 environment, since the pipeline relies on matplotlib < 3.9.
 
 ## Acknowledgements
 

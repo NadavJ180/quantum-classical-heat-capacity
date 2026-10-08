@@ -1,0 +1,14 @@
+Section 6 grid-factor check, 2026-10-08 23:03: potential {'a': 0.25, 'b': -0.5, 'c': -0.5, 'd': 0.0}, 1000 temperatures in [0.02, 13.3]
+
+base (Section 4 grids): 446s, 33 solves, largest grid 3197 pts, converged 1000/1000
+  vs exact phase-space Cv: max |diff| 8.37e-04 (the xi-scan's own convergence error, set by TOL_XI = 0.002)
+
+reference span x1.25, dx /1.25: 343s, converged 1000/1000
+
+reference span x1.5, dx /1.5: 590s, converged 1000/1000
+
+| span / dx factor | reference sweep time | largest grid | max rel. diff to base | mean rel. diff |
+|---|---|---|---|---|
+| 2 / 2 (current; full run) | 36.3 min | 12785 pts | 5.5e-12 | 2.4e-13 |
+| 1.25 / 1.25 | 5.7 min | 4995 pts | 6.9e-12 | 1.9e-13 |
+| 1.5 / 1.5 | 9.8 min | 7192 pts | 5.4e-12 | 2.0e-13 |
