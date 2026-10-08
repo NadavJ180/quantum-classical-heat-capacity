@@ -10,34 +10,29 @@ classical-limit xi-scan) are all escalated automatically when the
 pipeline's own diagnostics show a truncation artifact, instead of
 requiring the user to notice and fix it by hand.
 
-WHY THIS IS SAFE / GROUNDED IN EXISTING DIAGNOSTICS
+WHICH KNOB FIXES WHICH FAILURE (after the correct-classical fix)
 ---------------------------------------------------------------------
-FINDINGS.md documents the classical-limit plateau's only trustworthy
-window as
+The two curves now depend on different things:
 
-    sqrt(beta * DeltaE)  <<  xi  <<  sqrt(beta * E_max)
+    - QUANTUM Cv(T): the base spectrum of NUM_STATES levels. It is
+      exact as long as the top level stays thermally inaccessible at
+      the hottest temperature, E_max >= HOT_STATE_SAFETY * k_B T_hot.
+      Failing that -> grow NUM_STATES.
+    - CLASSICAL limit: the xi-scan re-solves xi^2 V at every xi and
+      sizes each of those spectra itself (Classical_Limit_Numerical.
+      ScaledSpectra, same HOT_STATE_SAFETY margin), so NUM_STATES no
+      longer enters it and the old finite-N collapse cannot occur.
+      What can fail is the ladder running out before the plateau
+      (`converge_xi`'s "max_steps"), typically at the cold end where
+      the classical limit needs the largest xi -> grow XI_START /
+      MAX_XI_STEPS. A ladder cut short by the hard cap XI_MAX
+      ("xi_cap") is NOT escalated -- raising XI_MAX is a deliberate
+      cost decision (grid sizes grow ~xi) -- and neither is a failed
+      DVR solve ("dvr_failed"); both are reported.
 
-DeltaE = the spectrum's level spacing, E_max = the highest computed
-level. The window's ABSOLUTE POSITION grows with sqrt(beta), but its
-WIDTH (the ratio of the two bounds) does not -- it depends only on
-E_max/DeltaE. That asymmetry is exactly why FINDINGS.md's own
-Troubleshooting table gives two different remedies for the two ends
-of the sweep:
-    - cold end (large beta, low T): "Classical limit drops -> increase
-      XI_START" -- a fixed XI_START can start below the window once it
-      has moved to large xi at cold T, and there may not be enough
-      scan steps left to climb into it (`converge_xi`'s "max_steps").
-    - hot end (small beta, high T): "Classical limit / benchmark error
-      -> increase NUM_STATES" -- the ABSOLUTE thermal energy k_B*T_hot
-      needs E_max to stay comfortably above it, or the partition sum
-      truncates thermally-accessible states (`converge_xi`'s
-      "finite_n", or `converge_n` never stabilising before N).
-
-`diagnose_escalation` below inspects exactly those two existing
-failure signatures (already computed by `sweep_temperature_range` in
-Classical_Limit_Numerical.py -- nothing new is computed here) on the
-matching half of the temperature sweep, and reports which knob(s) need
-to grow. The escalation loop itself lives in Quantum_HO_Master.py.
+`diagnose_escalation` below reads those signatures from the sweep's
+own output (nothing new is computed here) and reports which knob(s)
+need to grow. The escalation loop itself lives in Quantum_HO_Master.py.
 =====================================================================
 """
 
@@ -107,72 +102,68 @@ def diagnose_escalation(sweep, beta_arr, num_states, e_max,
                          n_margin_frac=0.9):
     """
     Inspect one round's `sweep_temperature_range` output and decide
-    whether NUM_STATES and/or XI_START/MAX_XI_STEPS need to grow
-    before the result can be trusted, using only the diagnostics the
-    sweep already computes (see module docstring for the physics).
+    whether NUM_STATES (quantum curve) and/or XI_START/MAX_XI_STEPS
+    (classical xi ladder) need to grow before the result can be
+    trusted, using only diagnostics the sweep already computes (see
+    module docstring for which failure maps to which knob).
 
     Parameters
     ----------
     sweep : dict
         Output of `Classical_Limit_Numerical.sweep_temperature_range`
-        (must contain "xi_results" and "n_conv").
+        (must contain "xi_results", "n_conv" and "n_available").
     beta_arr : array_like
         The inverse-temperature array the sweep was run over.
     num_states : int
-        Number of energy levels used for this round.
+        Number of levels in this round's base spectrum (kept in the
+        signature for the caller's bookkeeping; the decision only needs
+        e_max).
     e_max : float
-        Highest energy level actually computed this round.
+        Highest level of this round's base spectrum.
     hot_state_safety : float, optional
         Target ratio of e_max to k_B*T_hot (default 20.0, i.e. the top
         level's Boltzmann weight ~exp(-20) is already negligible).
     frac_threshold : float, optional
-        Fraction of the relevant sweep half allowed to show a failure
-        signature before escalation is triggered (default 0.05).
+        Fraction of temperatures allowed to show a failure signature
+        before escalation is triggered (default 0.05).
     n_margin_frac : float, optional
-        A converged n within this fraction of num_states is treated as
-        "no safety margin" (default 0.9), matching FINDINGS.md's
-        n-convergence diagnostic guidance.
+        A converged n within this fraction of the scaled spectrum's own
+        level count counts as "no safety margin" (default 0.9).
+        Reported only -- the scaled spectra are sized by the sweep itself.
 
     Returns
     -------
     dict with keys:
         need_states, need_xi : bool
-        finite_n_hot_frac, n_marginal_hot_frac, maxsteps_cold_frac : float
+        maxsteps_frac, xicap_frac, dvrfail_frac : float
+            Fraction of temperatures whose xi-scan stopped for that reason.
+        n_marginal_frac : float
+            Fraction of converged temperatures whose n-check had no margin
+            (or failed) on the converged xi's spectrum.
         direct_hot_coverage_fail : bool
     """
     beta_arr = np.asarray(beta_arr, dtype=float)
-    beta_median = np.median(beta_arr)
-    hot_mask = beta_arr <= beta_median
-    cold_mask = ~hot_mask
+    stop_reasons = np.array([xr["stop_reason"] for xr in sweep["xi_results"]])
+    maxsteps_frac = float(np.mean(stop_reasons == "max_steps"))
+    xicap_frac = float(np.mean(stop_reasons == "xi_cap"))
+    dvrfail_frac = float(np.mean(stop_reasons == "dvr_failed"))
 
-    xi_results = sweep["xi_results"]
-    n_conv = np.asarray(sweep["n_conv"], dtype=float)
-    stop_reasons = np.array([xr["stop_reason"] for xr in xi_results])
-
-    finite_n_hot_frac = float(np.mean(stop_reasons[hot_mask] == "finite_n")) if hot_mask.any() else 0.0
-    maxsteps_cold_frac = float(np.mean(stop_reasons[cold_mask] == "max_steps")) if cold_mask.any() else 0.0
-
-    n_conv_hot = n_conv[hot_mask]
-    if hot_mask.any():
-        marginal = np.isnan(n_conv_hot) | (n_conv_hot >= n_margin_frac * num_states)
-        n_marginal_hot_frac = float(np.mean(marginal))
+    converged = stop_reasons == "converged"
+    if converged.any():
+        n_conv = np.asarray(sweep["n_conv"], dtype=float)[converged]
+        n_avail = np.asarray(sweep["n_available"], dtype=float)[converged]
+        n_marginal_frac = float(np.mean(np.isnan(n_conv) | (n_conv >= n_margin_frac * n_avail)))
     else:
-        n_marginal_hot_frac = 0.0
+        n_marginal_frac = 0.0
 
     direct_hot_coverage_fail = bool(e_max < hot_state_safety / beta_arr.min())
 
-    need_states = (
-        finite_n_hot_frac > frac_threshold
-        or n_marginal_hot_frac > frac_threshold
-        or direct_hot_coverage_fail
-    )
-    need_xi = maxsteps_cold_frac > frac_threshold
-
     return {
-        "need_states": bool(need_states),
-        "need_xi": bool(need_xi),
-        "finite_n_hot_frac": finite_n_hot_frac,
-        "n_marginal_hot_frac": n_marginal_hot_frac,
-        "maxsteps_cold_frac": maxsteps_cold_frac,
+        "need_states": direct_hot_coverage_fail,
+        "need_xi": maxsteps_frac > frac_threshold,
+        "maxsteps_frac": maxsteps_frac,
+        "xicap_frac": xicap_frac,
+        "dvrfail_frac": dvrfail_frac,
+        "n_marginal_frac": n_marginal_frac,
         "direct_hot_coverage_fail": direct_hot_coverage_fail,
     }

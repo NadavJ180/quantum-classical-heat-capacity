@@ -14,9 +14,10 @@ rather than as part of the main (potential-agnostic) driver.
 Provides:
     - Exact energy eigenvalues E_n = hbar*omega*(n + 1/2)
     - The exact quantum Cv(T) (the Einstein oscillator formula)
-    - The exact classical (high-temperature) limit of Cv, which for a
-      1-D harmonic oscillator is simply k_B (one quadratic kinetic +
-      one quadratic potential degree of freedom, by equipartition)
+    - The exact classical (hbar -> 0) limit of Cv, which for a 1-D
+      harmonic oscillator is simply k_B at every T (one quadratic
+      kinetic + one quadratic potential degree of freedom, by
+      equipartition)
 
 This file does no plotting and makes no figures -- it just returns
 numbers. Plotting lives in HO_Benchmark.py.
@@ -86,18 +87,21 @@ def analytic_cv_HO_quantum(T, hbar=1.0, omega=1.0, kB=1.0):
 
 
 # =====================================================================
-# Exact HO classical (high-T) limit of Cv
+# Exact HO classical (hbar -> 0) limit of Cv
 # =====================================================================
 def analytic_cv_HO_classical(kB=1.0):
     """
-    Exact classical (high-temperature) limit of the 1-D harmonic
-    oscillator heat capacity. By the equipartition theorem, each
-    quadratic degree of freedom (kinetic + potential, here) 
-    contributes (1/2) k_B, giving Cv_classical = k_B for a 1-D HO.
+    Exact classical (hbar -> 0) heat capacity of the 1-D harmonic
+    oscillator. By the equipartition theorem, each quadratic degree of
+    freedom (kinetic + potential, here) contributes (1/2) k_B, giving
+    Cv_classical = k_B for a 1-D HO.
 
-    This is a constant (temperature-independent) by definition of
-    being the *classical* limit -- it is what the quantum Cv(T)
-    curve approaches as T -> infinity.
+    It is temperature-independent because the HO potential is purely
+    quadratic -- NOT because classical limits are constant in general.
+    The classical Cv of an anharmonic well depends on T (the double
+    well's runs from ~1 to ~1.45 and back to ~0.7), and only for the HO
+    (and other power laws) does it coincide with the T -> infinity
+    value of the quantum Cv at every T. See audit/classical_limit/AUDIT.md.
 
     Parameters
     ----------

@@ -1,0 +1,313 @@
+
+============================================================
+
+  SECTION 1 & 4 — DVR base computation + Cv pipeline  (1-D asymmetric double well)
+
+============================================================
+
+  --- Auto-tune round 1/4 (NUM_STATES=500, XI_START=1, MAX_XI_STEPS=35) ---
+
+  [Auto-Scanner] Analyzing smooth potential for 500 states...
+
+  [Auto-Scanner] Initial: [-11.256, 12.284]  span=23.5  pts=2000  dx=0.04056
+
+  [Auto-Scanner] Span iter 1/10: span 23.5 → 30.6  |ΔE|_max = 4.23e-10  ✓ converged
+
+  [Auto-Scanner] Final:   [-11.256, 12.284] | Grid Points: 2000
+
+  [DVR] Pass 1/3: Base grid (2000 pts) ... done (1.2s)
+
+  [DVR] Pass 2/3: Resolution check (2600 pts) ... done (2.2s)  max|ΔE| = 5.18e-10
+
+  [DVR] Pass 3/3: Boundary span check (2400 pts, ±10% wider) ... done (1.8s)  max|ΔE| = 5.35e-10
+
+  ✓  [Round 1: DVR 3-pass convergence check] done in 5.2s
+
+  [Auto-Tune] BETA_MIN auto-filled from T_max = 10*ΔE/k_B: ΔE=1.33, T_max=13.3 -> BETA_MIN=0.07519
+
+════════════════════════════════════════════════════════════
+
+  1-D asymmetric double well
+
+════════════════════════════════════════════════════════════
+
+  500 levels, E_min=-0.986, E_max=3.39e+03
+
+  β: 0.0751916856507514 → 50.0  (1000 log-spaced points)
+
+  33 DVR solves of xi^2 V (xi up to 1262, largest grid 3197 pts), 396s total
+
+  ✓  Both ξ and n converged at all 1000 temperatures.
+
+  Hardest ξ-convergence: T*=0.02219, ξ_conv=1262.177
+
+  Hardest n-convergence:  T*=0.4094, n_conv=245
+
+  ξ-conv: 1000/1000  (max ξ=1262.18)
+
+  n-conv: 1000/1000  (max n=245)
+
+════════════════════════════════════════════════════════════
+
+  ✓  [Round 1: Cv T-range sweep] done in 399.4s
+
+  Potential-shape figures saved: C:\Users\97254\AppData\Local\Temp\claude\C--Technion-Semester-6-quantum-classical-heat-capacity\fdc7b290-84f0-4f45-ba74-dfe504e07a0a\scratchpad\figures_run\1_d_asymmetric_double_well\a-0p25_b-m0p5_c-m0p5_d-0\energy_levels\potential_full_spectrum.png, C:\Users\97254\AppData\Local\Temp\claude\C--Technion-Semester-6-quantum-classical-heat-capacity\fdc7b290-84f0-4f45-ba74-dfe504e07a0a\scratchpad\figures_run\1_d_asymmetric_double_well\a-0p25_b-m0p5_c-m0p5_d-0\energy_levels\potential_zoomed.png
+
+============================================================
+
+  SECTION 2 — Numerical reference generation
+
+============================================================
+
+  [Reference Generator] Numerical reference grid:
+
+                      span            dx    num_pts
+
+        Base         23.54      0.011776       2000
+
+   Reference        47.081      0.005888       7997
+
+  Scaling: span ×2,  dx ÷2  (4.0× more pts total)
+
+  Solving 500 levels on reference grid ...   ⏱  [Section 2: reference DVR solve] still running ... 50s
+
+done (49.7s)
+
+  ✓  [Section 2: reference DVR solve] done in 49.7s
+
+============================================================
+
+  SECTION 3 — Energy-level accuracy (base DVR vs reference)
+
+============================================================
+
+------------------------------------------------------------
+
+  1-D asymmetric double well  [numerical reference  (span×2, dx÷2)]: DVR accuracy vs analytic energy levels
+
+------------------------------------------------------------
+
+  Levels compared:      500
+
+  Mean abs error:       5.870e-10
+
+  Mean rel error:       5.373e-13
+
+  Max abs error:        1.386e-09  (at n = 497)
+
+  Max rel error:        4.573e-11  (at n = 1)
+
+------------------------------------------------------------
+
+============================================================
+
+  SECTION 5 — DVR limit analysis (vs numerical reference)
+
+============================================================
+
+============================================================
+
+  1-D asymmetric double well — DVR Limit Analysis
+
+  Span: [-11.3, 12.3]  (span = 23.5)
+
+  Search A: n=500 fixed, sweeping dx
+
+  Search B: dx=0.01178 fixed (2000 pts), sweeping n
+
+============================================================
+
+  ⏱  [Section 5: DVR limit searches] still running ... 12s
+
+  ⏱  [Section 5: DVR limit searches] still running ... 22s
+
+  [Resolution Limit] n=500: maximum dx = 0.036955  (= 638 pts, error=1.931e-07)
+
+  ⏱  [Section 5: DVR limit searches] still running ... 33s
+
+  [Level Limit] Reference exhausted at n=500. Extending to 1998 levels ...
+
+  ⏱  [Section 5: DVR limit searches] still running ... 89s
+
+  ⏱  [Section 5: DVR limit searches] still running ... 99s
+
+  [Level Limit] dx=0.01178 (2000 pts): maximum trustworthy n = 582  (error=9.824e-07, capped by tolerance)  (reference extended)
+
+============================================================
+
+  ✓  [Section 5: DVR limit searches] done in 102.8s
+
+============================================================
+
+  SECTION 6 — Cv numerical benchmark (base vs reference)
+
+============================================================
+
+============================================================
+
+  Cv Numerical Benchmark: 1-D asymmetric double well
+
+  Reference: numerical reference  (span×2, dx÷2)
+
+============================================================
+
+  Sweeping T range [reference]:
+
+  33 DVR solves of xi^2 V (xi up to 1262, largest grid 12785 pts), 2176s total
+
+  ✓  Both ξ and n converged at all 1000 temperatures.
+
+------------------------------------------------------------
+
+  1-D asymmetric double well: Cv numerical benchmark
+
+  Reference: numerical reference  (span×2, dx÷2)
+
+------------------------------------------------------------
+
+  Quantum Cv(T)  [absolute error |ΔCv|]:
+
+    mean = 2.116e-12
+
+    max  = 8.453e-12
+
+  Classical limit Cv(T)  [relative error |ΔCv/Cv_ref|]:
+
+    mean = 2.402e-13
+
+    max  = 5.458e-12
+
+------------------------------------------------------------
+
+  ✓  [Section 6: reference Cv sweep] done in 2181.5s
+
+============================================================
+
+  SECTION 7 — Coefficient sweep (b)
+
+============================================================
+
+────────────────────────────────────────────────────────────
+
+  Coefficient sweep: b over [-0.9, -0.7, -0.5, -0.3, -0.09999999999999998, 0.0]
+
+────────────────────────────────────────────────────────────
+
+  [1/6] b = -0.9 ...
+
+  [Auto-Scanner] Analyzing smooth potential for 500 states...
+
+  [Auto-Scanner] Initial: [-10.960, 12.846]  span=23.8  pts=2000  dx=0.04056
+
+  [Auto-Scanner] Span iter 1/10: span 23.8 → 30.9  |ΔE|_max = 1.57e-10  ✓ converged
+
+  [Auto-Scanner] Final:   [-10.960, 12.846] | Grid Points: 2000
+
+  [DVR] Pass 1/3: Base grid (2000 pts) ... done (1.6s)
+
+  [DVR] Pass 2/3: Resolution check (2600 pts) ... done (3.4s)  max|ΔE| = 3.52e-10
+
+  [DVR] Pass 3/3: Boundary span check (2400 pts, ±10% wider) ...   ⏱  [Section 7: coefficient sweep] still running ... 11sdone (2.5s)  max|ΔE| = 9.82e-11
+
+    E0=-7.00316  E1=-4.10469  δ(E1-E0)=2.89847
+
+  [2/6] b = -0.7 ...
+
+  [Auto-Scanner] Analyzing smooth potential for 500 states...
+
+  [Auto-Scanner] Initial: [-11.103, 12.554]  span=23.7  pts=2000  dx=0.04056
+
+  [Auto-Scanner] Span iter 1/10: span 23.7 → 30.8  |ΔE|_max = 4.76e-10  ✓ converged
+
+  [Auto-Scanner] Final:   [-11.103, 12.554] | Grid Points: 2000
+
+  [DVR] Pass 1/3: Base grid (2000 pts) ... done (1.9s)
+
+  [DVR] Pass 2/3: Resolution check (2600 pts) ... done (3.2s)  max|ΔE| = 4.59e-10
+
+  [DVR] Pass 3/3: Boundary span check (2400 pts, ±10% wider) ...   ⏱  [Section 7: coefficient sweep] still running ... 22sdone (2.5s)  max|ΔE| = 2.85e-10
+
+    E0=-3.01527  E1=-0.799826  δ(E1-E0)=2.21544
+
+  [3/6] b = -0.5 ...
+
+  [Auto-Scanner] Analyzing smooth potential for 500 states...
+
+  [Auto-Scanner] Initial: [-11.256, 12.284]  span=23.5  pts=2000  dx=0.04056
+
+  [Auto-Scanner] Span iter 1/10: span 23.5 → 30.6  |ΔE|_max = 4.23e-10  ✓ converged
+
+  [Auto-Scanner] Final:   [-11.256, 12.284] | Grid Points: 2000
+
+  [DVR] Pass 1/3: Base grid (2000 pts) ... done (1.6s)
+
+  [DVR] Pass 2/3: Resolution check (2600 pts) ... done (2.9s)  max|ΔE| = 5.18e-10
+
+  [DVR] Pass 3/3: Boundary span check (2400 pts, ±10% wider) ... done (2.4s)  max|ΔE| = 5.35e-10
+
+    E0=-0.98606  E1=0.343874  δ(E1-E0)=1.32993
+
+  [4/6] b = -0.3 ...
+
+  [Auto-Scanner] Analyzing smooth potential for 500 states...
+
+  ⏱  [Section 7: coefficient sweep] still running ... 32s
+
+  [Auto-Scanner] Initial: [-11.424, 12.037]  span=23.5  pts=2000  dx=0.04056
+
+  [Auto-Scanner] Span iter 1/10: span 23.5 → 30.5  |ΔE|_max = 1.60e-10  ✓ converged
+
+  [Auto-Scanner] Final:   [-11.424, 12.037] | Grid Points: 2000
+
+  [DVR] Pass 1/3: Base grid (2000 pts) ... done (1.5s)
+
+  [DVR] Pass 2/3: Resolution check (2600 pts) ... done (3.3s)  max|ΔE| = 5.07e-10
+
+  [DVR] Pass 3/3: Boundary span check (2400 pts, ±10% wider) ...   ⏱  [Section 7: coefficient sweep] still running ... 43sdone (2.4s)  max|ΔE| = 7.78e-11
+
+    E0=-0.135309  E1=0.674704  δ(E1-E0)=0.810012
+
+  [5/6] b = -0.1 ...
+
+  [Auto-Scanner] Analyzing smooth potential for 500 states...
+
+  [Auto-Scanner] Initial: [-11.609, 11.813]  span=23.4  pts=2000  dx=0.04056
+
+  [Auto-Scanner] Span iter 1/10: span 23.4 → 30.4  |ΔE|_max = 1.09e-10  ✓ converged
+
+  [Auto-Scanner] Final:   [-11.609, 11.813] | Grid Points: 2000
+
+  [DVR] Pass 1/3: Base grid (2000 pts) ... done (1.6s)
+
+  [DVR] Pass 2/3: Resolution check (2600 pts) ... done (3.0s)  max|ΔE| = 5.23e-10
+
+  [DVR] Pass 3/3: Boundary span check (2400 pts, ±10% wider) ...   ⏱  [Section 7: coefficient sweep] still running ... 53sdone (2.6s)  max|ΔE| = 1.88e-10
+
+    E0=0.122354  E1=0.848968  δ(E1-E0)=0.726613
+
+  [6/6] b = 0 ...
+
+  [Auto-Scanner] Analyzing smooth potential for 500 states...
+
+  [Auto-Scanner] Initial: [-11.709, 11.709]  span=23.4  pts=2000  dx=0.04056
+
+  [Auto-Scanner] Span iter 1/10: span 23.4 → 30.4  |ΔE|_max = 4.82e-10  ✓ converged
+
+  [Auto-Scanner] Final:   [-11.709, 11.709] | Grid Points: 2000
+
+  [DVR] Pass 1/3: Base grid (2000 pts) ... done (1.5s)
+
+  [DVR] Pass 2/3: Resolution check (2600 pts) ... done (2.8s)  max|ΔE| = 1.44e-10
+
+  [DVR] Pass 3/3: Boundary span check (2400 pts, ±10% wider) ... done (2.3s)  max|ΔE| = 4.58e-10
+
+    E0=0.147235  E1=0.872261  δ(E1-E0)=0.725026
+
+  ⏱  [Section 7: coefficient sweep] still running ... 63s
+
+  ✓ Coefficient sweep figures saved to the coefficient_sweep/ folder.
+
+────────────────────────────────────────────────────────────
+
+  ✓  [Section 7: coefficient sweep] done in 66.6s
+

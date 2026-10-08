@@ -10,9 +10,11 @@ Classical_Limit_Numerical.py to find the numerical classical
 limit Cv(T) across the same temperature range, and produces all the
 diagnostic + summary plots (xi-convergence diagnostic, n-convergence
 diagnostic, and the combined Cv(T) curve plot). Everything here is
-driven by `run(energies, ...)`, which takes a pre-computed spectrum
-in -- it has no opinion about where those energies came from (DVR,
-analytic formula, anything).
+driven by `run(energies, potential_func, ...)`: the quantum Cv comes
+from the pre-computed spectrum (whatever produced it), while the
+classical limit needs the potential itself, because the xi-scan
+re-solves the scaled potential xi^2 V at every xi (see
+Classical_Limit_Numerical.py).
 
 This file does NOT contain any hard-coded physical systems (no Box,
 no HO, no Double Well). Those live in their own driver files/sections
@@ -67,9 +69,11 @@ def compute_quantum_heat_capacity_curve(energies, beta_arr, xi=1.0):
 def plot_xi_convergence_diagnostic(xi_result, beta_val, T_K_val, tol_xi, system_name):
     """
     Plot Cv as a function of the scaling factor xi for a single
-    (hardest-converging) temperature, color-coding each point by
-    whether it was part of a stable plateau, falling toward a
-    finite-N collapse, or still rising.
+    (hardest-converging) temperature. Each point is Cv evaluated with the
+    spectrum of xi^2 V at temperature xi^2 T (see
+    Classical_Limit_Numerical.py). Points are colored by whether they
+    belong to the verified plateau, satisfy the per-step stability test
+    without (yet) being part of it, or are still moving.
 
     Parameters
     ----------
@@ -89,32 +93,36 @@ def plot_xi_convergence_diagnostic(xi_result, beta_val, T_K_val, tol_xi, system_
     None (saves the figure to disk under figures/<system>/<params>/<category>/; see figures/output_paths.py).
     """
     BLUE, GREEN, ORANGE, YELLOW, GRAY = "#1f77b4", "#2ca02c", "#d62728", "#bcbd22", "#7f7f7f"
-    xis, cvs, deltas = xi_result["xi_values"], xi_result["cv_values"], xi_result["deltas"]
+    xis, cvs, errs = xi_result["xi_values"], xi_result["cv_values"], xi_result["errors"]
+    plateau = xi_result["plateau"]
     fig, ax = plt.subplots(figsize=(8, 5))
-    fig.suptitle(f"{system_name} \u2014 \u03be-Convergence Diagnostic\nHardest T: {T_K_val:.2f}  (\u03b2 = {beta_val:.4f})", fontsize=12, fontweight="bold")
+    fig.suptitle(f"{system_name} \u2014 \u03be-Convergence Diagnostic (\u03be\u00b2V re-solved)\nHardest T: {T_K_val:.3g}  (\u03b2 = {beta_val:.4f})", fontsize=12, fontweight="bold")
     ax.plot(xis, cvs, color=BLUE, linewidth=1.5, marker="s", markersize=5, zorder=3, label="Cv(\u03be)")
     for i in range(len(xis)):
-        d = deltas[i]
-        if d is not None and d < tol_xi:
+        if plateau is not None and plateau[0] <= i <= plateau[1]:
             c = GREEN
-        elif i > 0 and cvs[i] < cvs[i - 1]:
+        elif errs[i] is not None and errs[i] < tol_xi and cvs[i] >= 0.5 - tol_xi:
             c = YELLOW
         else:
             c = GRAY
         ax.scatter([xis[i]], [cvs[i]], color=c, zorder=5, s=60)
     if xi_result["converged"]:
-        xc, cc = xi_result["xi_converged"], xi_result["cv_converged"]
-        ax.axvline(xc, color=GREEN, linestyle=":", linewidth=1.3, label=f"\u03be_conv = {xc:.3f}")
+        xc, cc, ec = xi_result["xi_converged"], xi_result["cv_converged"], xi_result["error_estimate"]
+        ax.axvline(xc, color=GREEN, linestyle=":", linewidth=1.3, label=f"\u03be_conv = {xc:.4g}")
         ax.scatter([xc], [cc], color=GREEN, zorder=6, s=100, label=f"Cv_conv = {cc:.4f}")
-        ann, ann_colour = f"Converged \u2713\n\u03be_conv = {xc:.3f}\nCv_conv/kB = {cc:.5f}", GREEN
+        ann, ann_colour = (f"Converged \u2713\n\u03be_conv = {xc:.4g}\nCv_conv/kB = {cc:.5f}\n"
+                           f"est. distance to limit {ec:.1e}"), GREEN
     else:
         ann, ann_colour = f"NOT converged\n({xi_result['stop_reason']})", ORANGE
-    ax.text(0.97, 0.97, ann, transform=ax.transAxes, ha="right", va="top", fontsize=9, color=ann_colour,
+    ax.text(0.97, 0.03, ann, transform=ax.transAxes, ha="right", va="bottom", fontsize=9, color=ann_colour,
             bbox=dict(boxstyle="round,pad=0.4", facecolor="white", edgecolor=ann_colour, alpha=0.9))
-    dot_legend = [mpatches.Patch(color=GREEN, label="stable  |\u0394Cv| < tol"), mpatches.Patch(color=YELLOW, label="falling (finite-N collapse)"), mpatches.Patch(color=GRAY, label="rising / first point")]
+    dot_legend = [mpatches.Patch(color=GREEN, label="verified plateau (reported value = last point)"),
+                  mpatches.Patch(color=YELLOW, label="stable step, not (yet) a full plateau"),
+                  mpatches.Patch(color=GRAY, label="still moving / first point")]
     handles, labels = ax.get_legend_handles_labels()
-    ax.legend(handles=handles + dot_legend, fontsize=9, loc="lower left")
-    ax.set_xlabel("Scaling factor  \u03be", fontsize=11)
+    ax.legend(handles=handles + dot_legend, fontsize=9, loc="center left")
+    ax.set_xscale("log")
+    ax.set_xlabel("Scaling factor  \u03be   (V \u2192 \u03be\u00b2V,  T \u2192 \u03be\u00b2T)", fontsize=11)
     ax.set_ylabel("Cv / kB", fontsize=11)
     ax.grid(True, linestyle="--", alpha=0.5)
     plt.tight_layout()
@@ -232,17 +240,18 @@ def plot_cv_curves(T_arr, cv_quantum, cv_classical, xi_conv_arr, n_conv_arr, sys
 # =====================================================================
 # Full pipeline: quantum Cv + numerical classical limit + all plots
 # =====================================================================
-def run(energies, system_name,
+def run(energies, potential_func, system_name,
         beta_min=0.02, beta_max=5.0, n_beta=200,
-        xi_start=1.0, tol_xi=1e-3, min_stable_xi=5, xi_multiplier=1.3, max_xi_steps=80,
+        xi_start=1.0, tol_xi=2e-3, min_stable_xi=3, xi_multiplier=1.25, max_xi_steps=30,
         tol_cv=1e-4, min_stable_n=3,
+        mass=1.0, hbar=1.0, thermal_coverage=20.0, xi_max=np.inf, spectra=None,
         cv_analytic=None, T_units_label=r"$k_B T \,/\, E_0$"):
     """
-    Run the full general-purpose Cv pipeline for ANY system given its
-    energy spectrum: sweep the temperature range, find the numerical
-    classical limit at every T (via Classical_Limit_Numerical),
-    compute the true quantum Cv(T) curve, and produce the
-    xi-convergence diagnostic, n-convergence diagnostic (each shown
+    Run the full general-purpose Cv pipeline for ANY system: sweep the
+    temperature range, find the numerical classical limit at every T
+    (via Classical_Limit_Numerical, which re-solves xi^2 V at every xi),
+    compute the true quantum Cv(T) curve from `energies`, and produce
+    the xi-convergence diagnostic, n-convergence diagnostic (each shown
     at the single hardest-to-converge temperature), and the combined
     Cv(T) summary plot.
 
@@ -250,6 +259,10 @@ def run(energies, system_name,
     ----------
     energies : array_like
         Energy eigenvalues for the system (e.g. from DVR), ascending.
+        Used for the quantum Cv(T) only.
+    potential_func : callable
+        The system's potential V(x), unscaled. Used for the classical
+        limit only (each xi step solves xi^2 V).
     system_name : str
         Human-readable system name, used in plot titles/console output.
     beta_min, beta_max, n_beta : float, float, int, optional
@@ -265,9 +278,20 @@ def run(energies, system_name,
         noticeable wherever a curve's transition happens to land in
         that stretch), where log spacing puts ~150.
     xi_start, tol_xi, min_stable_xi, xi_multiplier, max_xi_steps :
-        Passed through to `converge_xi` at every temperature.
+        The xi ladder and plateau criterion, passed through to
+        `sweep_temperature_range` / `converge_xi`.
     tol_cv, min_stable_n :
         Passed through to `converge_n` at every temperature.
+    mass, hbar : float, optional
+        Physical constants of the system (default 1.0).
+    thermal_coverage : float, optional
+        Each scaled spectrum keeps levels up to E_0 + thermal_coverage
+        * k_B T (default 20.0; normally config.HOT_STATE_SAFETY).
+    xi_max : float, optional
+        Hard cap on xi (normally config.XI_MAX).
+    spectra : ScaledSpectra or None, optional
+        Cache of scaled spectra to reuse (e.g. from the previous
+        auto-tune round); None builds a new one. Returned in the result.
     cv_analytic : float, ndarray, or None, optional
         If known, the analytic classical-limit Cv to overlay as a
         reference curve on the summary plot.
@@ -283,6 +307,8 @@ def run(energies, system_name,
         sweep : dict
             Full output of `sweep_temperature_range` (includes
             per-temperature convergence traces for further inspection).
+        spectra : ScaledSpectra
+            The scaled-spectrum cache, for reuse by a later call.
     """
     beta_arr = np.geomspace(beta_min, beta_max, n_beta)
     T_arr = 1.0 / beta_arr
@@ -293,19 +319,21 @@ def run(energies, system_name,
     print(f"  \u03b2: {beta_min} \u2192 {beta_max}  ({n_beta} log-spaced points)")
 
     sweep = sweep_temperature_range(
-        energies, beta_arr,
+        potential_func, beta_arr,
         xi_start, tol_xi, min_stable_xi, xi_multiplier, max_xi_steps,
-        tol_cv, min_stable_n, verbose=True,
+        tol_cv, min_stable_n, mass=mass, hbar=hbar,
+        thermal_coverage=thermal_coverage, xi_max=xi_max, spectra=spectra, verbose=True,
     )
     cv_classical = sweep["cv_classical"]
     xi_conv = sweep["xi_conv"]
     n_conv = sweep["n_conv"]
 
-    # Use the largest converged n found anywhere in the sweep to define
-    # how many levels the "true quantum Cv(T)" curve below should use.
-    valid_n = n_conv[~np.isnan(n_conv)]
-    n_quantum = int(np.max(valid_n)) if len(valid_n) > 0 else len(energies)
-    cv_quantum = compute_quantum_heat_capacity_curve(energies[:n_quantum], beta_arr, xi=1.0)
+    # The quantum Cv uses the whole base spectrum. (It used to be cut at
+    # the largest n the classical n-scan needed, but that n now refers to
+    # the scaled spectra of xi^2 V, not to `energies`.) This is exact as
+    # long as the top level is thermally inaccessible, which the auto-tune
+    # loop enforces (Cv_AutoTune: E_max >= HOT_STATE_SAFETY * T_hot).
+    cv_quantum = compute_quantum_heat_capacity_curve(energies, beta_arr, xi=1.0)
 
     valid_xi_mask = ~np.isnan(xi_conv)
     if valid_xi_mask.any():
@@ -327,4 +355,5 @@ def run(energies, system_name,
     print(f"  n-conv: {valid_n_mask.sum()}/{n_beta}  (max n={int(np.nanmax(n_conv))})" if valid_n_mask.any() else "  n-conv: failed at all T")
     print(f"{rule}\n")
 
-    return {"beta_arr": beta_arr, "T_arr": T_arr, "cv_quantum": cv_quantum, "cv_classical": cv_classical, "xi_conv": xi_conv, "n_conv": n_conv, "sweep": sweep}
+    return {"beta_arr": beta_arr, "T_arr": T_arr, "cv_quantum": cv_quantum, "cv_classical": cv_classical,
+            "xi_conv": xi_conv, "n_conv": n_conv, "sweep": sweep, "spectra": sweep["spectra"]}

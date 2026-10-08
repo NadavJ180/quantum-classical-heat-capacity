@@ -32,7 +32,8 @@ import time
 # Automatic grid configuration (SMOOTH potentials only)
 # =====================================================================
 def auto_configure_dvr(potential_func, num_levels, mass=1.0, hbar=1.0, x0_guess=1.0,
-                        span_tol=1e-5, span_growth_factor=1.3, max_span_iters=10):
+                        span_tol=1e-5, span_growth_factor=1.3, max_span_iters=10,
+                        energy_ceiling=None, turning_points=None, padding=2.0):
     """
     Automatically pick a converged grid window [x_min, x_max] and
     grid point count for a SMOOTH potential well.
@@ -94,6 +95,23 @@ def auto_configure_dvr(potential_func, num_levels, mass=1.0, hbar=1.0, x0_guess=
         a warning (default 10). Ten steps at 1.3× gives a maximum
         span of 1.3^10 ≈ 13.8× the initial value, which is more than
         sufficient for any physically reasonable smooth potential.
+    energy_ceiling : float or None, optional
+        Highest energy the grid must resolve. None (default) keeps the
+        HO-calibrated estimate v_min + 1.5 * num_levels, which assumes a
+        level spacing of order 1. A caller whose spacing is very
+        different must pass its own ceiling -- e.g. the classical-limit
+        xi-scan (Classical_Limit_Numerical.py), which solves xi^2 V and
+        so has level spacings ~xi times larger.
+    turning_points : (float, float) or None, optional
+        The classically allowed window [x_left, x_right] at the energy
+        ceiling, if the caller already knows it. None (default) finds it
+        with fsolve started 5 length units either side of the minimum.
+    padding : float, optional
+        Absolute padding added beyond each turning point, on top of 15%
+        of the allowed width (default 2.0, the original value). Stage 2
+        widens the span until the energies stop changing, so a smaller
+        padding is safe whenever the wavefunction tails are short -- as
+        for xi^2 V at large xi, whose tails shrink as xi grows.
 
     Returns
     -------
@@ -120,22 +138,29 @@ def auto_configure_dvr(potential_func, num_levels, mass=1.0, hbar=1.0, x0_guess=
     # back for a pathological potential.
     v_min = float(res.fun)
 
-    # Energy ceiling calibrated for HO-like level spacing (E_n ~ n).
-    # The adaptive loop in Stage 2 corrects the span if this
-    # underestimates how far the wavefunctions actually extend.
-    E_ceiling = v_min + (1.5 * num_levels)
+    # Energy ceiling calibrated for HO-like level spacing (E_n ~ n),
+    # unless the caller supplies one. The adaptive loop in Stage 2
+    # corrects the span if this underestimates how far the
+    # wavefunctions actually extend.
+    if energy_ceiling is None:
+        E_ceiling = v_min + (1.5 * num_levels)
+    else:
+        E_ceiling = float(energy_ceiling)
     root_func = lambda x: potential_func(x) - E_ceiling
 
-    try:
-        x_right = opt.fsolve(root_func, x0=x_bottom + 5.0)[0]
-        x_left  = opt.fsolve(root_func, x0=x_bottom - 5.0)[0]
-    except Exception:
-        raise RuntimeError("fsolve failed to find classical turning points.")
+    if turning_points is None:
+        try:
+            x_right = opt.fsolve(root_func, x0=x_bottom + 5.0)[0]
+            x_left  = opt.fsolve(root_func, x0=x_bottom - 5.0)[0]
+        except Exception:
+            raise RuntimeError("fsolve failed to find classical turning points.")
+    else:
+        x_left, x_right = (float(t) for t in turning_points)
 
     # Initial padded span
     span0  = abs(x_right - x_left)
-    x_min  = x_left  - (0.15 * span0) - 2.0
-    x_max  = x_right + (0.15 * span0) + 2.0
+    x_min  = x_left  - (0.15 * span0) - padding
+    x_max  = x_right + (0.15 * span0) + padding
 
     # Fixed centre used throughout Stage 2 (symmetric expansion)
     x_center = (x_min + x_max) / 2.0

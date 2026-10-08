@@ -1,0 +1,49 @@
+Corrected classical-limit engine, 2026-10-08 22:02; config.py settings: XI_START=1.0, XI_MULT=1.25, TOL_XI=0.002, MIN_STABLE_XI=3, MAX_XI_STEPS=35, XI_MAX=2000.0, HOT_STATE_SAFETY=20.0
+
+HO, V = x^2/2 (exact 1): T in [0.02, 10], 40 log-spaced points
+  191s; 29 DVR solves of xi^2 V; levels 287..550; grid 1148..2200 pts
+  xi-scan outcomes: {'converged': 40};  n-check failed at 0
+  max |Cv - exact| over converged T: 7.81e-04;  max |true error - estimate|: 5.7e-07;  xi_conv 1.95..517
+         T  pipeline     exact     error  estimate  xi_conv
+   10.0000   0.99978   1.00000  -2.2e-04   2.2e-04    1.953
+    5.2867   0.99922   1.00000  -7.8e-04   7.8e-04    1.953
+    2.7949   0.99927   1.00000  -7.3e-04   7.3e-04    3.815
+    1.4776   0.99931   1.00000  -6.9e-04   6.9e-04    7.451
+    0.7811   0.99936   1.00000  -6.4e-04   6.4e-04    14.55
+    0.4130   0.99940   1.00000  -6.0e-04   6.0e-04    28.42
+    0.2183   0.99943   1.00000  -5.7e-04   5.7e-04    55.51
+    0.1154   0.99947   1.00000  -5.3e-04   5.3e-04    108.4
+    0.0610   0.99922   1.00000  -7.8e-04   7.8e-04    169.4
+    0.0323   0.99927   1.00000  -7.3e-04   7.3e-04    330.9
+
+quartic, V = x^4 (exact 3/4): T in [0.05, 20], 40 log-spaced points
+  36s; 23 DVR solves of xi^2 V; levels 103..192; grid 437..817 pts
+  xi-scan outcomes: {'converged': 40};  n-check failed at 0
+  max |Cv - exact| over converged T: 8.19e-04;  max |true error - estimate|: 3.3e-06;  xi_conv 1.95..135.5
+         T  pipeline     exact     error  estimate  xi_conv
+   20.0000   0.74963   0.75000  -3.7e-04   3.7e-04    1.953
+   10.8181   0.74940   0.75000  -6.0e-04   5.9e-04    2.441
+    5.8516   0.74939   0.75000  -6.1e-04   6.1e-04    3.815
+    3.1652   0.74937   0.75000  -6.3e-04   6.3e-04     5.96
+    1.7121   0.74935   0.75000  -6.5e-04   6.5e-04    9.313
+    0.9261   0.74933   0.75000  -6.7e-04   6.7e-04    14.55
+    0.5009   0.74931   0.75000  -6.9e-04   6.9e-04    22.74
+    0.2709   0.74929   0.75000  -7.1e-04   7.1e-04    35.53
+    0.1466   0.74927   0.75000  -7.3e-04   7.3e-04    55.51
+    0.0793   0.74925   0.75000  -7.5e-04   7.5e-04    86.74
+
+double well {'a': 0.25, 'b': -0.5, 'c': -0.5, 'd': 0.0} (exact: phase-space integral): T in [0.02, 13.3], 40 log-spaced points
+  345s; 33 DVR solves of xi^2 V; levels 110..598; grid 440..3197 pts
+  xi-scan outcomes: {'converged': 40};  n-check failed at 0
+  max |Cv - exact| over converged T: 8.19e-04;  max |true error - estimate|: 5.9e-06;  xi_conv 1.95..1262
+         T  pipeline     exact     error  estimate  xi_conv
+   13.3000   0.71524   0.71562  -3.7e-04   3.7e-04    1.953
+    6.8286   0.71236   0.71315  -7.9e-04   7.8e-04    2.441
+    3.5060   0.73657   0.73710  -5.4e-04   5.4e-04     5.96
+    1.8001   0.86140   0.86214  -7.3e-04   7.3e-04    11.64
+    0.9242   1.21704   1.21769  -6.5e-04   6.5e-04    28.42
+    0.4745   1.43239   1.43303  -6.3e-04   6.3e-04    55.51
+    0.2436   1.12729   1.12788  -5.9e-04   5.9e-04    108.4
+    0.1251   1.03312   1.03371  -5.9e-04   5.9e-04    211.8
+    0.0642   1.01448   1.01507  -5.9e-04   5.9e-04    413.6
+    0.0330   1.00672   1.00731  -5.9e-04   5.9e-04    807.8

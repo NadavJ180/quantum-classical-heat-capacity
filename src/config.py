@@ -132,15 +132,25 @@ SCAN_COUNT = 2
 # covered by the regular sweep. Set to None to disable.
 SCAN_SYMMETRIC_VALUE = 0.0
 
-# --- xi / n convergence parameters ---
-# XI_START = 3.0: first probe is already at effective T/9, allowing
-# the classical-limit plateau to be found at much colder temperatures
-# than XI_START = 1.0 would permit.
-XI_START      = 3.0
-TOL_XI        = 5e-3
+# --- xi / n convergence parameters (classical limit) ---
+# The xi ladder is XI_START * XI_MULT**k, k < MAX_XI_STEPS, never above
+# XI_MAX. Every rung re-solves the DVR for xi^2 V (Gelbwaser Eq. S7; see
+# Classical_Limit_Numerical.py), so rungs are deliberately coarse (x1.25)
+# and the ladder starts at the physical system itself (xi = 1): at high T
+# the plateau is reached by xi ~ 2, while cold temperatures climb further
+# (xi of several hundred at k_B T = 0.02). Each solve keeps levels up to
+# E_0 + HOT_STATE_SAFETY * k_B T, so the old finite-N collapse cannot occur.
+# TOL_XI is the tolerance on the classical VALUE: each step's estimated
+# distance to the xi -> inf limit, |dCv| / (XI_MULT^2 - 1) (hbar^2 law),
+# must be below it for MIN_STABLE_XI consecutive steps.
+# XI_MAX is a hard cap that auto-tune escalation never raises (grid sizes
+# grow ~xi); a ladder stopped by it is reported as "xi_cap".
+XI_START      = 1.0
+TOL_XI        = 2e-3
 MIN_STABLE_XI = 3
-XI_MULT       = 1.1
-MAX_XI_STEPS  = 80
+XI_MULT       = 1.25
+MAX_XI_STEPS  = 35
+XI_MAX        = 2000.0
 TOL_CV        = 1e-4
 MIN_STABLE_N  = 3
 

@@ -17,6 +17,21 @@ by DVR_Reference_Generator.py). Produces two two-panel figures:
         bottom: |Cv_base - Cv_ref| / |Cv_ref| vs T  (RELATIVE error,
                 log y-axis, only where both base AND reference converged)
 
+WHAT "REFERENCE" MEANS FOR EACH CURVE
+---------------------------------------------------------------------
+Quantum Cv: computed from the reference spectrum (Section 2's wider,
+finer DVR solve of V) instead of the base spectrum.
+
+Classical limit: the xi-scan does not use the base spectrum at all --
+it re-solves the scaled potential xi^2 V at every xi (see
+Classical_Limit_Numerical.py). Its reference is therefore the same
+xi-scan with EVERY one of those scaled solves done on a grid widened
+and refined by the same span_factor/dx_factor Section 2 uses for V.
+Agreement shows the classical curve is converged in the grid; it does
+not, by itself, test the method (an error shared by both runs would
+cancel -- see audit/classical_limit/AUDIT.md for how that happened
+before this correction).
+
 WHICH ERROR METRIC AND WHY
 ---------------------------------------------------------------------
 QUANTUM Cv (Figure 1 bottom) -- ABSOLUTE ERROR:
@@ -48,26 +63,35 @@ from figures.output_paths import save_figure
 # =====================================================================
 # Run the full Cv pipeline (quantum + classical) on an energy spectrum
 # =====================================================================
-def _run_cv_pipeline(energies, beta_arr,
+def _run_cv_pipeline(energies, potential_func, beta_arr,
                      xi_start, tol_xi, min_stable_xi, xi_multiplier, max_xi_steps,
-                     tol_cv, min_stable_n, label="", verbose=True):
+                     tol_cv, min_stable_n, mass=1.0, hbar=1.0, thermal_coverage=20.0,
+                     xi_max=np.inf, span_factor=1.0, dx_factor=1.0, label="", verbose=True):
     """
     Run sweep_temperature_range + compute_quantum_heat_capacity_curve
-    for a given energy spectrum. Lightweight wrapper used internally
-    by `run_cv_numerical_benchmark` to avoid duplicating sweep logic.
+    for one (spectrum, grid quality) pair. Lightweight wrapper used
+    internally by `run_cv_numerical_benchmark` to avoid duplicating
+    sweep logic.
 
     Parameters
     ----------
     energies : array_like
-        Energy spectrum to use (base DVR or reference DVR).
+        Energy spectrum for the quantum Cv (base DVR or reference DVR).
+    potential_func : callable
+        The unscaled V(x), for the classical limit's xi^2 V solves.
     beta_arr : ndarray
         Inverse-temperature array, shared with the base pipeline.
     xi_start, tol_xi, min_stable_xi, xi_multiplier, max_xi_steps :
         Passed through to sweep_temperature_range (xi-convergence).
     tol_cv, min_stable_n :
         Passed through to sweep_temperature_range (n-convergence).
+    mass, hbar, thermal_coverage, xi_max : optional
+        Passed through to sweep_temperature_range.
+    span_factor, dx_factor : float, optional
+        Grid widening/refinement applied to every xi^2 V solve (1.0 =
+        the base grids; Section 6's reference passes its own factors).
     label : str, optional
-        Short description printed in the tqdm bar ("base" / "reference").
+        Short description printed before the sweep ("base" / "reference").
     verbose : bool, optional
         Whether to show the tqdm progress bar (default True).
 
@@ -76,32 +100,26 @@ def _run_cv_pipeline(energies, beta_arr,
     dict with keys:
         cv_quantum   : ndarray, shape (len(beta_arr),)
         cv_classical : ndarray, shape (len(beta_arr),) -- NaN where not converged
-        n_quantum_used : int
         sweep : dict  (full sweep_temperature_range output)
     """
     if verbose and label:
         print(f"  Sweeping T range [{label}]:")
 
     sweep = sweep_temperature_range(
-        energies, beta_arr,
+        potential_func, beta_arr,
         xi_start, tol_xi, min_stable_xi, xi_multiplier, max_xi_steps,
-        tol_cv, min_stable_n,
+        tol_cv, min_stable_n, mass=mass, hbar=hbar, thermal_coverage=thermal_coverage,
+        xi_max=xi_max, span_factor=span_factor, dx_factor=dx_factor,
         verbose=verbose,
     )
 
-    # Use the maximum converged n found across the temperature sweep
-    # to define how many levels the quantum Cv curve uses.
-    valid_n = sweep["n_conv"][~np.isnan(sweep["n_conv"])]
-    n_quantum = int(np.max(valid_n)) if len(valid_n) > 0 else len(energies)
-
-    cv_quantum = compute_quantum_heat_capacity_curve(
-        energies[:n_quantum], beta_arr, xi=1.0
-    )
+    # Whole spectrum, exactly as Quantum_Classical_Combined.run does for
+    # the base curve, so the two quantum curves are directly comparable.
+    cv_quantum = compute_quantum_heat_capacity_curve(energies, beta_arr, xi=1.0)
 
     return {
         "cv_quantum":      cv_quantum,
         "cv_classical":    sweep["cv_classical"],
-        "n_quantum_used":  n_quantum,
         "sweep":           sweep,
     }
 
@@ -264,11 +282,10 @@ def plot_classical_limit_comparison(T_arr, cv_classical_base, cv_classical_ref,
                   silently masked). The joint-convergence count is shown
                   in the figure title.
 
-    WHY RELATIVE ERROR: see `plot_quantum_cv_comparison`. The classical-
-    limit curve is approximately flat at k_B at high T and falls toward
-    zero at cold T (where the classical limit is not physically
-    reachable). Relative error normalises the cold-T region correctly
-    so the error comparison is fair across the full temperature range.
+    WHY RELATIVE ERROR: see `plot_quantum_cv_comparison`. Unlike the
+    quantum Cv, the classical Cv never approaches zero -- for
+    H = p^2/2m + V(x) it is 1/2 + beta^2 Var(V) >= k_B/2 at every T --
+    so the relative error is well defined across the whole range.
 
     Parameters
     ----------
@@ -309,7 +326,11 @@ def plot_classical_limit_comparison(T_arr, cv_classical_base, cv_classical_ref,
     ax_top.plot(T_arr, cv_classical_ref, color=ORANGE, linewidth=1.6,
                 linestyle=":", label="Classical limit \u2014 numerical reference")
     ax_top.set_ylabel(r"$C_v / k_B$", fontsize=12)
-    ax_top.set_ylim(0, 1.1)
+    # The classical Cv of an anharmonic well can exceed k_B (the double
+    # well's peaks near 1.45), so scale to the data rather than a fixed 1.1.
+    top = np.nanmax([np.nanmax(cv_classical_base), np.nanmax(cv_classical_ref), 1.0]) \
+        if np.isfinite(cv_classical_base).any() or np.isfinite(cv_classical_ref).any() else 1.0
+    ax_top.set_ylim(0, 1.1 * top)
     ax_top.set_xscale("log")
     ax_top.legend(fontsize=10, loc="upper left")
     ax_top.grid(True, linestyle="--", alpha=0.4)
@@ -382,16 +403,20 @@ def print_cv_benchmark_summary(quantum_err, classical_err, system_name, referenc
 # =====================================================================
 # Orchestrator: compute reference Cv, compare, plot, summarise
 # =====================================================================
-def run_cv_numerical_benchmark(base_cv_results, reference_energies, beta_arr,
+def run_cv_numerical_benchmark(base_cv_results, reference_energies, potential_func, beta_arr,
                                 system_name, reference_label,
                                 xi_start, tol_xi, min_stable_xi,
                                 xi_multiplier, max_xi_steps,
                                 tol_cv, min_stable_n,
+                                mass=1.0, hbar=1.0, thermal_coverage=20.0, xi_max=np.inf,
+                                span_factor=2.0, dx_factor=2.0,
                                 T_units_label=r"$k_B T / \hbar\omega$"):
     """
     Full numerical Cv benchmark:
-        1. Run the quantum Cv + classical limit sweep on `reference_energies`
-           using the same xi/n parameters as the base pipeline.
+        1. Compute the reference quantum Cv from `reference_energies`, and
+           the reference classical limit by re-running the xi-scan with
+           every xi^2 V solve done on a grid widened/refined by
+           span_factor/dx_factor -- same xi/n parameters as the base.
         2. Compare both curves against the pre-computed `base_cv_results`
            via `compute_cv_comparison_error` (which returns both absolute
            and relative error arrays).
@@ -413,6 +438,8 @@ def run_cv_numerical_benchmark(base_cv_results, reference_energies, beta_arr,
     reference_energies : array_like
         High-precision reference energy spectrum (from
         DVR_Reference_Generator.generate_reference_energies).
+    potential_func : callable
+        The unscaled V(x), for the reference classical limit's xi^2 V solves.
     beta_arr : ndarray
         Shared inverse-temperature array (must match the one used to
         produce base_cv_results).
@@ -426,6 +453,11 @@ def run_cv_numerical_benchmark(base_cv_results, reference_energies, beta_arr,
         pipeline so the two sweeps are directly comparable.
     tol_cv, min_stable_n :
         N-convergence parameters. Should match the base pipeline.
+    mass, hbar, thermal_coverage, xi_max : optional
+        Should match the base pipeline.
+    span_factor, dx_factor : float, optional
+        Grid widening/refinement for every reference xi^2 V solve --
+        normally the same factors Section 2 used for the reference spectrum.
     T_units_label : str, optional
         LaTeX x-axis label for both Cv plots
         (default r"$k_B T / \\hbar\\omega$").
@@ -434,8 +466,7 @@ def run_cv_numerical_benchmark(base_cv_results, reference_energies, beta_arr,
     -------
     dict with keys:
         ref_cv_results  : dict  -- from _run_cv_pipeline on reference energies;
-                                   contains "cv_quantum", "cv_classical",
-                                   "n_quantum_used", "sweep"
+                                   contains "cv_quantum", "cv_classical", "sweep"
         quantum_error   : dict  -- from compute_cv_comparison_error;
                                    contains abs_error, rel_error, max_abs,
                                    mean_abs, max_abs_idx, max_rel, mean_rel,
@@ -447,12 +478,14 @@ def run_cv_numerical_benchmark(base_cv_results, reference_energies, beta_arr,
     print(f"  Reference: {reference_label}")
     print(f"{'='*60}")
 
-    # Run the same pipeline (quantum Cv + classical limit) on the reference energies.
+    # Reference quantum Cv from the reference energies; reference classical
+    # limit from the xi-scan with every xi^2 V solve on a widened/refined grid.
     # verbose=True keeps the tqdm bar so the user sees progress.
     ref_cv_results = _run_cv_pipeline(
-        reference_energies, beta_arr,
+        reference_energies, potential_func, beta_arr,
         xi_start, tol_xi, min_stable_xi, xi_multiplier, max_xi_steps,
-        tol_cv, min_stable_n,
+        tol_cv, min_stable_n, mass=mass, hbar=hbar, thermal_coverage=thermal_coverage,
+        xi_max=xi_max, span_factor=span_factor, dx_factor=dx_factor,
         label="reference", verbose=True,
     )
 

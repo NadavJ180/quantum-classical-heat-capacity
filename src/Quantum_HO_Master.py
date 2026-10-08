@@ -70,7 +70,7 @@ from config                         import (MASS, HBAR, my_potential,
                                             NUM_STATES, BETA_MIN, BETA_MAX,
                                             N_BETA, XI_START, TOL_XI,
                                             MIN_STABLE_XI, XI_MULT,
-                                            MAX_XI_STEPS, TOL_CV,
+                                            MAX_XI_STEPS, XI_MAX, TOL_CV,
                                             MIN_STABLE_N, LIMIT_TOLERANCE,
                                             INTERACTIVE_REFERENCE_SCALING,
                                             REFERENCE_SPAN_FACTOR,
@@ -162,6 +162,10 @@ if __name__ == "__main__":
     xi_start_cur     = XI_START
     max_xi_steps_cur = MAX_XI_STEPS
     beta_min_resolved = None
+    # Cache of the classical-limit xi-scan's DVR solves of xi^2 V. It does
+    # not depend on NUM_STATES, so a round that only grows NUM_STATES
+    # reuses every solve instead of repeating them.
+    classical_spectra = None
 
     for escalation_round in range(1, MAX_ESCALATION_ROUNDS + 1):
         print(f"\n  --- Auto-tune round {escalation_round}/{MAX_ESCALATION_ROUNDS} "
@@ -186,15 +190,19 @@ if __name__ == "__main__":
         with SimpleTimer(f"Round {escalation_round}: Cv T-range sweep"):
             base_cv_results = run_general_cv_pipeline(
                 energies=energies_base,
+                potential_func=my_potential,
                 system_name=SYSTEM_NAME,
                 beta_min=beta_min_resolved, beta_max=BETA_MAX, n_beta=N_BETA,
                 xi_start=xi_start_cur, tol_xi=TOL_XI,
                 min_stable_xi=MIN_STABLE_XI,
                 xi_multiplier=XI_MULT, max_xi_steps=max_xi_steps_cur,
                 tol_cv=TOL_CV, min_stable_n=MIN_STABLE_N,
+                mass=MASS, hbar=HBAR, thermal_coverage=HOT_STATE_SAFETY,
+                xi_max=XI_MAX, spectra=classical_spectra,
                 cv_analytic=None,          # no analytic overlay
                 T_units_label=T_UNITS_LABEL,
             )
+        classical_spectra = base_cv_results["spectra"]
 
         diag = diagnose_escalation(
             base_cv_results["sweep"], base_cv_results["beta_arr"],
@@ -209,10 +217,9 @@ if __name__ == "__main__":
         if escalation_round == MAX_ESCALATION_ROUNDS:
             warnings.warn(
                 f"[Auto-Tune] Reached MAX_ESCALATION_ROUNDS ({MAX_ESCALATION_ROUNDS}) "
-                f"without clearing the truncation diagnostics "
-                f"(finite_n_hot_frac={diag['finite_n_hot_frac']:.2f}, "
-                f"n_marginal_hot_frac={diag['n_marginal_hot_frac']:.2f}, "
-                f"maxsteps_cold_frac={diag['maxsteps_cold_frac']:.2f}). "
+                f"without clearing the diagnostics "
+                f"(direct_hot_coverage_fail={diag['direct_hot_coverage_fail']}, "
+                f"maxsteps_frac={diag['maxsteps_frac']:.2f}). "
                 f"Proceeding with the last attempt's results.",
                 UserWarning,
             )
@@ -231,6 +238,18 @@ if __name__ == "__main__":
     NUM_STATES   = num_states_cur
     XI_START     = xi_start_cur
     MAX_XI_STEPS = max_xi_steps_cur
+
+    # Not escalated automatically (see Cv_AutoTune): a ladder stopped by the
+    # hard cap XI_MAX, or a failed DVR solve of xi^2 V. The classical limit
+    # is NaN at those temperatures -- say so instead of leaving gaps unexplained.
+    if diag["xicap_frac"] > 0 or diag["dvrfail_frac"] > 0:
+        warnings.warn(
+            f"[Classical limit] xi-scan hit the hard cap XI_MAX={XI_MAX:g} at "
+            f"{diag['xicap_frac']:.0%} of temperatures and a failed DVR solve at "
+            f"{diag['dvrfail_frac']:.0%}; the classical limit is NaN there. Raise "
+            f"XI_MAX deliberately (cost grows ~xi) or narrow the temperature range.",
+            UserWarning,
+        )
 
     # Potential-shape figures (V(x) with the computed spectrum overlaid;
     # one full-spectrum overview, one zoomed on the well's own minima).
@@ -336,9 +355,10 @@ if __name__ == "__main__":
 
     # =================================================================
     # SECTION 6 -- Cv numerical benchmark
-    # Runs the FULL Cv pipeline (quantum Cv + classical limit sweep)
-    # on the reference energies, then compares both curves against
-    # the base results from Section 4. Produces:
+    # Quantum Cv from the reference energies; classical limit from the
+    # xi-scan with every xi^2 V solve done on a grid widened/refined by
+    # the same factors Section 2 used. Compares both curves against the
+    # base results from Section 4. Produces:
     #   Figure 1: quantum Cv(T) base vs reference + error panel
     #   Figure 2: classical limit Cv(T) base vs reference + error panel
     # =================================================================
@@ -350,6 +370,7 @@ if __name__ == "__main__":
         cv_benchmark_results = run_cv_numerical_benchmark(
             base_cv_results=base_cv_results,
             reference_energies=energies_ref,
+            potential_func=my_potential,
             beta_arr=base_cv_results["beta_arr"],
             system_name=SYSTEM_NAME,
             reference_label=ref_label,
@@ -357,6 +378,9 @@ if __name__ == "__main__":
             min_stable_xi=MIN_STABLE_XI,
             xi_multiplier=XI_MULT, max_xi_steps=MAX_XI_STEPS,
             tol_cv=TOL_CV, min_stable_n=MIN_STABLE_N,
+            mass=MASS, hbar=HBAR, thermal_coverage=HOT_STATE_SAFETY, xi_max=XI_MAX,
+            span_factor=reference_result["span_factor"],
+            dx_factor=reference_result["dx_factor"],
             T_units_label=T_UNITS_LABEL,
         )
 
