@@ -1,0 +1,33 @@
+Section 7 with per-variant classical limits (branch correct-classical, 2026-10-09)
+Run: Sections 1 & 4 + Section 7 of the pipeline exactly as Quantum_HO_Master.py calls them, config.py defaults,
+1000 log-spaced temperatures in [0.02, 13.3]. Figure: figures/corrected_run/cv_coefficient_sweep_own_classical.png
+
+base run (Sections 1 & 4), b = -0.5:
+  33 DVR solves of xi^2 V (xi up to 1262, largest grid 3197 pts), 440s total
+  ✓  Both ξ and n converged at all 1000 temperatures.
+  [1/6] b = -0.9 ...
+  35 DVR solves of xi^2 V (xi up to 1972, largest grid 3115 pts), 450s total
+  ✓  Both ξ and n converged at all 1000 temperatures.
+  [2/6] b = -0.7 ...
+  34 DVR solves of xi^2 V (xi up to 1578, largest grid 3138 pts), 451s total
+  ✓  Both ξ and n converged at all 1000 temperatures.
+  [3/6] b = -0.5 ...
+    classical limit: reused from the base run (same potential, same settings)
+  [4/6] b = -0.3 ...
+  32 DVR solves of xi^2 V (xi up to 1010, largest grid 3475 pts), 490s total
+  ✓  Both ξ and n converged at all 1000 temperatures.
+  [5/6] b = -0.1 ...
+  31 DVR solves of xi^2 V (xi up to 807.8, largest grid 3674 pts), 388s total
+  ✓  Both ξ and n converged at all 1000 temperatures.
+  [6/6] b = 0 ...
+  31 DVR solves of xi^2 V (xi up to 807.8, largest grid 3697 pts), 337s total
+  ✓  Both ξ and n converged at all 1000 temperatures.
+
+TOTAL 2632s
+     b  max(Cv_q - Cv_cl)    at T  quantum peak    at T  classical peak    at T  cl. NaN
+  -0.9            -0.0021    13.3        1.2837    2.61          1.4215     2.3        0
+  -0.7            -0.0013    13.3        1.1257    1.48          1.4290    1.17        0
+  -0.5            -0.0010    13.3        0.8631   0.911          1.4479   0.538        0
+  -0.3            -0.0010    13.3        0.7207    13.3          1.5019   0.228        0
+  -0.1            -0.0009    13.3        0.7252    13.3          1.6352  0.0769        0
+     0            -0.0009    13.3        0.7258    13.3          1.1370  0.0514        0

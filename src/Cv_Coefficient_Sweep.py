@@ -12,8 +12,9 @@ figures/output_paths.py -- deliberately NOT the `cv`/`energy_levels`
 folders the rest of the pipeline uses, since these figures are about
 comparing variants, not diagnosing the base run):
 
-    cv_coefficient_sweep.png    -- quantum Cv(T) per variant, overlaid
-                                    with the base run's classical limit
+    cv_coefficient_sweep.png    -- per variant, its quantum Cv(T)
+                                    (solid) and its OWN classical limit
+                                    (dashed), in the same color
     potential_comparison.png    -- V(x) + low-lying spectrum per variant,
                                     for correlating a Cv anomaly with the
                                     potential shape that causes it (side-
@@ -22,17 +23,26 @@ comparing variants, not diagnosing the base run):
                                     variant, as the variant count grows --
                                     see `plot_variant_potentials`)
 
-WHY NO XI/N-CONVERGENCE SEARCH HERE
+EACH VARIANT GETS ITS OWN CLASSICAL LIMIT
 ---------------------------------------------------------------------
-The classical-limit curve is reused verbatim from the base run's
-`base_cv_results["cv_classical"]` -- it is NOT recomputed per variant.
-Each variant's quantum Cv(T) is instead a direct evaluation of the
-literal, unscaled quantum heat capacity (xi=1.0, no rescaling): given
-a spectrum, Cv(T) = k_B*beta^2*Var(E) is an exact formula, not an
-approximation that needs a convergence search -- the xi/n-convergence
-machinery elsewhere in this project exists only to locate the
-classical-limit PLATEAU (a genuinely different, harder problem), which
-this file deliberately does not attempt per variant.
+The classical heat capacity depends on the potential, and strongly so
+for this family: the classical Cv of the double well has its own peak
+(two regions of configuration space, see audit/classical_limit/
+OPTION_A_physics.md) whose height and position move with b. Comparing a
+variant's quantum Cv against ANOTHER potential's classical curve is
+therefore meaningless -- the question "is the quantum Cv above the
+classical one?" only makes sense for the same potential. So every
+variant's classical limit is computed with exactly the same xi-scan
+(Classical_Limit_Numerical.sweep_temperature_range: xi^2 V re-solved at
+every xi) and the base run's own settings, on the shared temperature
+grid; the base variant simply reuses the base run's curve (identical
+computation). This costs one classical sweep per non-base variant
+(minutes each -- the dominant cost of this section).
+
+Each variant's QUANTUM Cv(T) is a direct evaluation of the literal
+quantum heat capacity from its own spectrum (xi = 1.0): given a
+spectrum, Cv(T) = k_B*beta^2*Var(E) is an exact formula, not an
+approximation that needs a convergence search.
 
 IS IT VALID TO REUSE THE BASE RUN'S NUM_STATES FOR EVERY VARIANT?
 ---------------------------------------------------------------------
@@ -97,8 +107,10 @@ import re
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
+from matplotlib.lines import Line2D
 
 from DVR.DVR_Algorithm import auto_configure_dvr, get_fully_converged_energy_levels
+from Classical_Limit_Numerical import sweep_temperature_range
 from Quantum_Classical_Combined import compute_quantum_heat_capacity_curve
 from figures.output_paths import save_figure
 # Reused rather than reimplemented so the potential-comparison panels
@@ -425,35 +437,37 @@ def _variant_colors(n):
 
 
 # =====================================================================
-# Plot: reused classical limit + one quantum curve per variant
+# Plot: each variant's quantum Cv (solid) and own classical limit (dashed)
 # =====================================================================
-def plot_coefficient_sweep(T_arr, cv_classical_base, variant_values, variant_curves,
+def plot_coefficient_sweep(T_arr, variant_values, variant_curves, variant_classical,
                             scan_param, system_name, formula_text=None,
                             marginal_values=None, T_units_label=r"$k_B T \,/\, E_0$",
-                            variant_deltas=None, symmetric_value=None):
+                            variant_deltas=None, symmetric_value=None,
+                            classical_incomplete=None):
     """
-    Plot the base run's classical-limit Cv(T) (reused, unchanged)
-    together with one quantum Cv(T) curve per coefficient variant.
-    Deliberately excludes everything else (xi/n convergence, secondary
-    axes) -- this figure is only about comparing the variants' quantum
-    curves against one shared classical-limit reference. `variant_values`/
-    `variant_curves` may be shorter than the full requested sweep (see
+    Plot, for every coefficient variant, its quantum Cv(T) (solid) and
+    its OWN classical-limit Cv(T) (dashed) in the same color, so each
+    quantum curve is compared only with the classical curve of the same
+    potential. Deliberately excludes everything else (xi/n convergence,
+    secondary axes). `variant_values`/`variant_curves`/`variant_classical`
+    may be shorter than the full requested sweep (see
     `run_coefficient_sweep`) -- variants that failed to converge are
     simply not plotted; even an empty list still produces a valid
-    figure showing just the classical-limit reference.
+    (empty) figure.
 
     Parameters
     ----------
     T_arr : ndarray
         Temperature axis, shared with the base run.
-    cv_classical_base : ndarray
-        The base run's already-computed numerical classical limit.
     variant_values : list of float
         This variant's value of `scan_param`, one per curve, used for
         the legend and the color mapping (ascending order). May be
         shorter than the requested sweep if some variants failed.
     variant_curves : list of ndarray
         Quantum Cv(T) curves, one per entry in `variant_values`.
+    variant_classical : list of ndarray
+        Each variant's own classical-limit Cv(T) (NaN where its xi-scan
+        did not converge), one per entry in `variant_values`.
     scan_param : str
         Name of the varied coefficient (for the legend/title).
     system_name : str
@@ -480,41 +494,51 @@ def plot_coefficient_sweep(T_arr, cv_classical_base, variant_values, variant_cur
         (e.g. config.SCAN_SYMMETRIC_VALUE) -- that one curve's label is
         flagged "(symmetric)" so it reads as the reference case rather
         than just another swept value. None flags nothing.
+    classical_incomplete : set of float or None, optional
+        Values whose classical-limit xi-scan failed at some temperatures
+        (gaps in the dashed curve) -- flagged with a dagger in the legend.
 
     Returns
     -------
     None (saves the figure; see figures/output_paths.py).
     """
-    # Reserved for the classical-limit reference line only -- deliberately
-    # NOT reused for any variant curve (tab10's own green, #2ca02c, would
-    # otherwise collide with whichever variant lands on that palette slot
-    # and become invisible underneath the dashed reference line).
-    CLASSICAL_LIMIT_COLOR = "#000000"
     marginal_values = marginal_values or set()
-    fig, ax = plt.subplots(figsize=(9, 6))
-    title_lines = [f"{system_name} — Quantum $C_v(T)$ vs {scan_param}"]
+    classical_incomplete = classical_incomplete or set()
+    fig, ax = plt.subplots(figsize=(12, 6.2))
+    title_lines = [f"{system_name} — Quantum vs classical $C_v(T)$ across {scan_param}"]
     if formula_text:
         title_lines.append(formula_text)
-    title_lines.append("(shared classical limit reused from the base run)")
+    title_lines.append("(solid: quantum;  dashed: classical limit of the same potential)")
     fig.suptitle("\n".join(title_lines), fontsize=13, fontweight="bold")
 
     colors = _variant_colors(len(variant_values))
     deltas = variant_deltas if variant_deltas is not None else [None] * len(variant_values)
-    for value, curve, color, delta in zip(variant_values, variant_curves, colors, deltas):
+    for value, curve, classical, color, delta in zip(variant_values, variant_curves,
+                                                      variant_classical, colors, deltas):
         flag = " *" if value in marginal_values else ""
+        flag += " †" if value in classical_incomplete else ""
         sym_flag = " (symmetric)" if symmetric_value is not None and np.isclose(value, symmetric_value) else ""
         delta_text = f", δ(E1-E0)={delta:.3g}" if delta is not None else ""
         ax.plot(T_arr, curve, color=color, linewidth=1.8,
                 label=f"{scan_param} = {value:g}{sym_flag}{delta_text}{flag}")
-
-    ax.plot(T_arr, cv_classical_base, color=CLASSICAL_LIMIT_COLOR, linewidth=2.2, linestyle="--",
-            label="Numerical classical limit (base run)")
+        ax.plot(T_arr, classical, color=color, linewidth=1.6, linestyle="--")
 
     ax.set_xlabel(T_units_label, fontsize=12)
     ax.set_ylabel(r"$C_v \,/\, k_B$", fontsize=12)
     ax.set_xscale("log")
-    legend_title = "* hot-end coverage marginal (see console)" if marginal_values else None
-    ax.legend(fontsize=9, loc="upper left", title=legend_title, title_fontsize=8)
+    # One entry per variant (its color), plus two neutral entries explaining
+    # the line styles. Outside the axes: the curves span the whole frame.
+    handles, labels = ax.get_legend_handles_labels()
+    handles += [Line2D([], [], color="0.25", linewidth=1.8),
+                Line2D([], [], color="0.25", linewidth=1.6, linestyle="--")]
+    labels += ["quantum $C_v(T)$", "classical limit (same potential)"]
+    notes = []
+    if marginal_values:
+        notes.append("* hot-end coverage marginal")
+    if classical_incomplete:
+        notes.append("† classical limit incomplete")
+    ax.legend(handles, labels, fontsize=9, loc="center left", bbox_to_anchor=(1.01, 0.5),
+              title=("; ".join(notes) + " (see console)") if notes else None, title_fontsize=8)
     ax.grid(True, linestyle="--", alpha=0.4)
     plt.tight_layout()
     # tight_layout() doesn't reserve room for a multi-line suptitle by
@@ -758,14 +782,17 @@ def run_coefficient_sweep(base_cv_results, my_potential, base_params,
                            hot_state_safety=20.0, num_states_growth=1.6,
                            num_states_cap=4000, max_escalation_rounds=4,
                            T_units_label=r"$k_B T \,/\, E_0$",
-                           symmetric_value=None):
+                           symmetric_value=None,
+                           xi_start=1.0, tol_xi=2e-3, min_stable_xi=3, xi_multiplier=1.25,
+                           max_xi_steps=35, xi_max=np.inf, tol_cv=1e-4, min_stable_n=3):
     """
     Generate the coefficient variants, solve each one's own spectrum
     (escalating that variant's own NUM_STATES if its hot-end thermal
     coverage is marginal -- see `solve_variant_with_hot_coverage` and
-    this module's docstring), compute its quantum Cv(T) directly (no
-    xi/n-convergence search), and produce both the Cv comparison plot
-    and the potential/spectrum comparison plot(s).
+    this module's docstring), compute its quantum Cv(T) directly, compute
+    its OWN classical limit with the same xi-scan and settings as the
+    base run (`_variant_classical_limit`), and produce both the Cv
+    comparison plot and the potential/spectrum comparison plot(s).
 
     A variant whose DVR solve fails outright (typically: this
     coefficient value makes the potential non-confining, e.g. a
@@ -773,14 +800,14 @@ def run_coefficient_sweep(base_cv_results, my_potential, base_params,
     -- its failure is caught, diagnosed (see `_diagnose_variant_failure`),
     and printed; the figures are still produced from whichever variants
     DID converge. If every variant fails, the Cv figure still saves
-    (showing just the classical-limit reference) and a clear warning
-    is printed.
+    (empty) and a clear warning is printed.
 
     Parameters
     ----------
     base_cv_results : dict
         Output of `Quantum_Classical_Combined.run()` for the base
-        potential. Must contain "T_arr" and "cv_classical".
+        potential. Must contain "beta_arr", "T_arr" and "cv_classical"
+        (the base variant's classical limit is reused from it).
     my_potential : callable
     base_params : dict
         config.POTENTIAL_PARAMS.
@@ -808,12 +835,21 @@ def run_coefficient_sweep(base_cv_results, my_potential, base_params,
         regular SCAN_STEP/SCAN_COUNT sweep doesn't already include it)
         and to `plot_coefficient_sweep` (flags that one curve's legend
         entry "(symmetric)"). None adds/flags nothing.
+    xi_start, tol_xi, min_stable_xi, xi_multiplier, max_xi_steps, xi_max, tol_cv, min_stable_n :
+        The classical-limit xi-scan settings -- normally the base run's
+        own final (post-escalation) values, so every variant's classical
+        curve is computed exactly like the base one. `hot_state_safety`
+        doubles as the scan's thermal coverage, as in the base run.
 
     Returns
     -------
     dict with keys:
         variant_params, variant_curves : list of dict / ndarray
             Only the variants that converged, in swept order.
+        variant_classical : list of ndarray
+            Each converged variant's own classical-limit Cv(T), same order.
+        classical_incomplete : list of float
+            Values whose classical xi-scan failed at some temperatures.
         variant_deltas : list of float
             Each converged variant's E1-E0 gap (see `plot_coefficient_sweep`'s
             `variant_deltas`), same order as `variant_params`/`variant_curves`.
@@ -835,8 +871,8 @@ def run_coefficient_sweep(base_cv_results, my_potential, base_params,
     rule = "─" * 60
     print(f"\n{rule}\n  Coefficient sweep: {scan_param} over {all_values}\n{rule}")
 
-    ok_params, ok_values, ok_curves, ok_records, ok_deltas = [], [], [], [], []
-    failed, marginal_values = [], []
+    ok_params, ok_values, ok_curves, ok_classical, ok_records, ok_deltas = [], [], [], [], [], []
+    failed, marginal_values, classical_incomplete = [], [], []
     for i, params in enumerate(variant_params):
         value = params[scan_param]
         print(f"  [{i + 1}/{len(variant_params)}] {scan_param} = {value:g} ...", flush=True)
@@ -871,9 +907,21 @@ def run_coefficient_sweep(base_cv_results, my_potential, base_params,
         delta01 = float(energies[1] - energies[0]) if len(energies) > 1 else float("nan")
         print(f"    E0={energies[0]:.6g}  E1={energies[1]:.6g}  δ(E1-E0)={delta01:.6g}")
 
+        is_base = all(np.isclose(params[k], base_params[k]) for k in base_params)
+        classical = _variant_classical_limit(
+            functools.partial(my_potential, p=params), beta_arr, base_cv_results if is_base else None,
+            xi_start, tol_xi, min_stable_xi, xi_multiplier, max_xi_steps, tol_cv, min_stable_n,
+            mass, hbar, hot_state_safety, xi_max)
+        n_missing = int(np.sum(np.isnan(classical)))
+        if n_missing:
+            classical_incomplete.append(value)
+            print(f"    ⚠ classical limit: xi-scan failed at {n_missing}/{len(classical)} temperatures "
+                  f"(gaps in the dashed curve)")
+
         ok_params.append(params)
         ok_values.append(value)
         ok_curves.append(curve)
+        ok_classical.append(classical)
         ok_deltas.append(delta01)
         ok_records.append({
             "value": value, "params": params, "energies": energies,
@@ -884,9 +932,10 @@ def run_coefficient_sweep(base_cv_results, my_potential, base_params,
 
     formula_text = format_potential_formula(formula_template, base_params, scan_param)
     plot_coefficient_sweep(
-        T_arr, base_cv_results["cv_classical"], ok_values, ok_curves,
+        T_arr, ok_values, ok_curves, ok_classical,
         scan_param, system_name, formula_text, set(marginal_values), T_units_label,
         variant_deltas=ok_deltas, symmetric_value=symmetric_value,
+        classical_incomplete=set(classical_incomplete),
     )
     potential_figure_paths = plot_variant_potentials(
         ok_records, scan_param, system_name, formula_template, base_params,
@@ -896,16 +945,51 @@ def run_coefficient_sweep(base_cv_results, my_potential, base_params,
         print(f"  ⚠ {len(failed)}/{len(variant_params)} coefficient values did not converge "
               f"and are OMITTED from both plots: {[f['value'] for f in failed]}")
         if not ok_values:
-            print("  ⚠ NO variant converged -- the Cv plot shows only the classical-limit reference, "
+            print("  ⚠ NO variant converged -- the Cv plot is empty, "
                   "and no potential-comparison figure was produced.")
     if marginal_values:
         print(f"  ⚠ {len(marginal_values)} coefficient value(s) kept with marginal hot-end coverage "
               f"(flagged with * in the Cv plot legend): {marginal_values}")
+    if classical_incomplete:
+        print(f"  ⚠ {len(classical_incomplete)} coefficient value(s) with gaps in the classical limit "
+              f"(flagged with † in the Cv plot legend): {classical_incomplete}")
     print(f"  ✓ Coefficient sweep figures saved to the coefficient_sweep/ folder.\n{rule}\n")
 
     return {
         "variant_params": ok_params, "variant_curves": ok_curves,
+        "variant_classical": ok_classical, "classical_incomplete": classical_incomplete,
         "variant_deltas": ok_deltas,
         "failed": failed, "marginal_values": marginal_values,
         "potential_figure_paths": potential_figure_paths,
     }
+
+
+# =====================================================================
+# One variant's own classical limit
+# =====================================================================
+def _variant_classical_limit(potential_func, beta_arr, base_cv_results,
+                             xi_start, tol_xi, min_stable_xi, xi_multiplier, max_xi_steps,
+                             tol_cv, min_stable_n, mass, hbar, thermal_coverage, xi_max):
+    """
+    The classical-limit Cv(T) of one variant, on the shared temperature
+    grid, from the same xi-scan (Classical_Limit_Numerical) and settings
+    as the base run. For the base variant itself (`base_cv_results` not
+    None) the base run's curve is returned -- it is the identical
+    computation, so repeating it would only cost time.
+    """
+    if base_cv_results is not None:
+        print("    classical limit: reused from the base run (same potential, same settings)")
+        return np.asarray(base_cv_results["cv_classical"], dtype=float)
+    try:
+        sweep = sweep_temperature_range(
+            potential_func, beta_arr,
+            xi_start, tol_xi, min_stable_xi, xi_multiplier, max_xi_steps,
+            tol_cv, min_stable_n, mass=mass, hbar=hbar,
+            thermal_coverage=thermal_coverage, xi_max=xi_max, verbose=True,
+        )
+    except Exception as exc:
+        # Same policy as a failed quantum solve: keep the sweep going and
+        # flag this variant (its dashed curve is simply absent).
+        print(f"    ✗ classical limit failed for this variant: {exc}")
+        return np.full(len(beta_arr), np.nan)
+    return sweep["cv_classical"]

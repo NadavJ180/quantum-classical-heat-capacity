@@ -30,7 +30,7 @@ DVR computation on a finer/wider grid.
     SECTION 7     -- Coefficient sweep          (Cv_Coefficient_Sweep)
                      quantum Cv(T) across several variants of the base
                      potential (one named POTENTIAL_PARAMS coefficient
-                     swept) vs. the base run's classical limit
+                     swept), each vs. its own classical limit
 
 Sections keep their original numbering (matching FINDINGS.md/README.md);
 1 and 4 are a merged, auto-tuned loop rather than two fixed, single-shot
@@ -389,9 +389,10 @@ if __name__ == "__main__":
     # Compares the quantum Cv(T) curves AND the potentials/spectra
     # themselves of several variants of the base potential that differ
     # only in one named POTENTIAL_PARAMS coefficient (config.SCAN_PARAM),
-    # against the single classical-limit curve already computed above
-    # for the base potential, with the potential's formula
-    # (config.POTENTIAL_FORMULA) annotated on the Cv plot. Every
+    # each against ITS OWN classical-limit curve (same xi-scan and
+    # settings as the base run above; the base variant reuses the base
+    # curve), with the potential's formula (config.POTENTIAL_FORMULA)
+    # annotated on the Cv plot. Every
     # variant's own NUM_STATES is escalated (reusing the same
     # HOT_STATE_SAFETY/NUM_STATES_GROWTH/NUM_STATES_CAP/
     # MAX_ESCALATION_ROUNDS knobs as the base run's own auto-tune loop)
@@ -421,4 +422,7 @@ if __name__ == "__main__":
             hot_state_safety=HOT_STATE_SAFETY, num_states_growth=NUM_STATES_GROWTH,
             num_states_cap=NUM_STATES_CAP, max_escalation_rounds=MAX_ESCALATION_ROUNDS,
             T_units_label=T_UNITS_LABEL, symmetric_value=SCAN_SYMMETRIC_VALUE,
+            xi_start=XI_START, tol_xi=TOL_XI, min_stable_xi=MIN_STABLE_XI,
+            xi_multiplier=XI_MULT, max_xi_steps=MAX_XI_STEPS, xi_max=XI_MAX,
+            tol_cv=TOL_CV, min_stable_n=MIN_STABLE_N,
         )
