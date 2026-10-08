@@ -1,0 +1,130 @@
+Classical-limit audit, branch correct-classical, 2026-10-08 22:12
+Audited engine: src/Classical_Limit_Numerical.py at commit 1ccfb7d, with that commit's settings NUM_STATES=500, XI_START=3.0, TOL_XI=0.005, MIN_STABLE_XI=3, XI_MULT=1.1, MAX_XI_STEPS=80, TOL_CV=0.0001, MIN_STABLE_N=3
+
+==============================================================================
+T1  Runtime trace: which spectrum does compute_cv receive inside the pipeline?
+==============================================================================
+  sweep_temperature_range over 5 temperatures -> 164 compute_cv calls
+  distinct xi values used: 49 (from 3 to 291)
+  distinct spectra passed: 1  (identical to the input spectrum: True)
+  => every xi step is evaluated on the SAME, unscaled spectrum; no spectrum of xi^2 V
+     is ever computed. (converge_n, the other half of the sweep, also reuses it:
+     Classical_Limit_Numerical.py:238.)
+
+==============================================================================
+T2  compute_cv(E, beta, xi) == compute_cv(E, beta/xi^2, 1): the scan is Cv_quantum(xi^2 T)
+==============================================================================
+  1000 random (spectrum, beta, xi) triples: max |difference| = 5.4e-12
+  HO, exact levels: max |compute_cv(E, 1/T, xi) - Einstein Cv(xi^2 T)| = 5.3e-13  (xi = 2, 5, 20; 40 temperatures; repo's own analytic_cv_HO_quantum)
+  => at every xi step the pipeline evaluates the ordinary quantum Cv of V at the
+     temperature xi^2 T. The scan heats the system; it never rescales V.
+
+==============================================================================
+T3  Eq. S7 with the repo's DVR: E_n(hbar, xi^2 V)/xi^2 vs E_n(hbar/xi, V) vs E_n(hbar, V)/xi^2
+==============================================================================
+  double well (config.py), xi = 2:  max|S7 - hbar/xi| = 1.4e-12;  max|pipeline - hbar/xi| = 92.8;  E_0: S7 -1.4644, hbar/xi -1.4644, pipeline -0.2465
+  double well (config.py), xi = 4:  max|S7 - hbar/xi| = 2.5e-12;  max|pipeline - hbar/xi| = 58;  E_0: S7 -1.7261, hbar/xi -1.7261, pipeline -0.0616
+  HO, V = x^2/2, xi = 2:  max|S7 - hbar/xi| = 1.9e-12;  max|pipeline - hbar/xi| = 37.4;  E_0: S7 0.2500, hbar/xi 0.2500, pipeline 0.1250
+  HO, V = x^2/2, xi = 4:  max|S7 - hbar/xi| = 1.2e-12;  max|pipeline - hbar/xi| = 28;  E_0: S7 0.1250, hbar/xi 0.1250, pipeline 0.0312
+  => Eq. S7 holds for the solver to ~1e-12, so 'scale V and T by xi^2' and 'hbar -> hbar/xi'
+     are the same calculation. The pipeline's E_n(V)/xi^2 is neither, for the double well
+     AND for the HO (whose levels it shrinks as hbar -> hbar/xi^2 instead; see T5).
+
+==============================================================================
+T4  Gap ratio (E_n - E_0)(xi^2 V) / (E_n - E_0)(V), n = 1..20, xi = 2
+==============================================================================
+  Theorem (proved in AUDIT.md, checked numerically in T5): if this ratio is the same q for
+  every n, the pipeline's xi-scan at xi_p equals the correct xi-scan at xi = xi_p sqrt(q(xi)),
+  so both reach the same plateau. If it depends on n, no relabelling exists.
+  HO (exact)               min 2.000000  max 2.000000  spread 0.0e+00   homogeneous value: xi = 2
+  box (exact)              min 1.000000  max 1.000000  spread 0.0e+00   homogeneous value: 1
+  x^4 (DVR)                min 1.587401  max 1.587401  spread 2.2e-13   homogeneous value: xi^(2/3) = 1.5874
+  Poschl-Teller (exact)    min 1.114357  max 1.548913  spread 4.3e-01   homogeneous value: none (inhomogeneous)
+  double well (DVR)        min 1.548244  max 2.860690  spread 1.3e+00   homogeneous value: none (inhomogeneous)
+  [figure] figures/T4_gap_ratios.png
+
+==============================================================================
+T5  The HO validation, reproduced with the pipeline's own functions
+==============================================================================
+  Checks the repo actually ran on the HO:
+   (i)  quantum Cv, DVR vs Einstein formula (HO_Benchmark):    max abs error 3.2e-13
+   (ii) classical limit, base DVR vs reference DVR (Section 6): max rel error 2.0e-13   <- the 'machine precision' classical figure
+  Check the repo never quantified (HO_Benchmark only draws k_B next to the curve):
+   (iii) classical limit vs the exact value 1:
+  per-temperature origin of the pipeline's value: plateau 410, tail-pick (S1) 0, n-scan fallback (S2) 90, NaN 0
+    max |pipeline - exact| on plateau  points: 0.00254 at T = 3.26
+    max |pipeline - exact| on fallback points: 0.0079 at T = 3.3
+  Relabelling identity (HO): max |pipeline(xi) - correct S7(xi^2)| = 7.1e-14 over 4 xi x 500 T
+  => for the HO the pipeline's scan IS the correct scan (with xi read as xi^2), and the
+     correct answer is T-independent. Checks (i)-(iii) are therefore blind to the defect:
+     (i) never touches the classical code, (ii) compares the code with itself, (iii) passes
+     for any method that returns the high-T value, which is what the defect produces.
+  [figure] figures/T5_ho_validation.png
+
+==============================================================================
+T6  Infinite square well, L = 1 (exact levels pi^2 n^2 / 2; xi^2 V = V inside, walls stay infinite)
+==============================================================================
+  pipeline xi-scan (as-is, N_PIPE exact levels) vs exact classical Cv:
+  per-temperature origin of the pipeline's value: plateau 220, tail-pick (S1) 30, n-scan fallback (S2) 50, NaN 0
+    max |pipeline - exact| on plateau  points: 0.00837 at T = 1.33
+    max |pipeline - exact| on tail     points: 0.49 at T = 28.1
+    max |pipeline - exact| on fallback points: 0.5 at T = 0.155
+  correct S7 xi-scan, max |Cv - Cv_cl| over T >= 1:  xi=1: 5.0e-01,  xi=2: 1.7e-01,  xi=4: 6.2e-02,  xi=8: 3.8e-02,  xi=16: 1.9e-02,  xi=32: 9.7e-03,  xi=64: 4.9e-03
+  => for the box, 'spectrum of xi^2 V' IS 'spectrum of V', so the pipeline is the paper's
+     prescription exactly -- the method was first written for this system (commit e9fa799:
+     `E_n = n**2 * E_g / xi**2`, the box spectrum at hbar/xi).
+
+==============================================================================
+T7  Pure quartic V = x^4 (DVR; homogeneous but anharmonic, exact Cv_cl = 3/4)
+==============================================================================
+  pipeline xi-scan vs 3/4:
+  per-temperature origin of the pipeline's value: plateau 300, tail-pick (S1) 0, n-scan fallback (S2) 0, NaN 0
+    max |pipeline - exact| on plateau  points: 0.000413 at T = 0.114
+  => passes: what the pipeline needs is homogeneous level scaling (T4), not a harmonic well.
+
+==============================================================================
+T8  Poschl-Teller V = 1 tan^2 x on (-pi/2, pi/2): exact levels for every xi^2 V,
+    analytic T-dependent classical Cv (1 at low T -> 1/2 at high T). No DVR anywhere.
+==============================================================================
+  (a) level formula vs finite differences (6000 pts), xi = 1, lowest 10 levels: max rel diff 2.4e-06
+  (a) level formula vs finite differences (6000 pts), xi = 4, lowest 10 levels: max rel diff 2.9e-06
+  (b) analytic Cv_cl vs numerical integral: max abs diff 7.1e-13 (grid change 2e-16, 8001 pts); Cv_cl runs 0.9814 (T=0.02) -> 0.5623 (T=20)
+  (c)
+  pipeline xi-scan (as-is, N_PIPE exact levels) vs exact classical Cv:
+  per-temperature origin of the pipeline's value: plateau 284, tail-pick (S1) 16, n-scan fallback (S2) 0, NaN 0
+    max |pipeline - exact| on plateau  points: 0.471 at T = 0.02
+    max |pipeline - exact| on tail     points: 0.647 at T = 2.74
+  correct S7 xi-scan, max |Cv - Cv_cl| over T >= 1:  xi=1: 2.1e-01,  xi=2: 4.3e-02,  xi=4: 1.0e-02,  xi=8: 2.5e-03,  xi=16: 6.1e-04,  xi=32: 1.5e-04,  xi=64: 3.8e-05
+  => the pipeline's xi-scan returns the high-T value at every T; the paper's prescription,
+     evaluated with the pipeline's own compute_cv, converges onto the analytic answer.
+
+==============================================================================
+T9  The project's double well, {'a': 0.25, 'b': -0.5, 'c': -0.5, 'd': 0.0}
+==============================================================================
+  grid: T in [0.02, 13.3], 1000 points (BETA_MIN auto, as in Quantum_HO_Master)
+  exact classical integral: grid change 9e-16 (8001 pts)
+  pipeline range 0.7275..0.7404,  exact classical range 0.7126..1.4487
+  pipeline xi-scan vs exact classical:
+  per-temperature origin of the pipeline's value: plateau 1000, tail-pick (S1) 0, n-scan fallback (S2) 0, NaN 0
+    max |pipeline - exact| on plateau  points: 0.72 at T = 0.535
+  correct S7 xi = 1: 225 levels of xi^2 V;  max|Cv - Cv_cl| over T >= 1: 3.0e-01;  within 0.01 of Cv_cl for T >= 4.61
+  correct S7 xi = 2: 350 levels of xi^2 V;  max|Cv - Cv_cl| over T >= 1: 9.8e-02;  within 0.01 of Cv_cl for T >= 2.55
+  correct S7 xi = 4: 600 levels of xi^2 V;  max|Cv - Cv_cl| over T >= 1: 2.6e-02;  within 0.01 of Cv_cl for T >= 1.49
+  correct S7 xi = 8: 1100 levels of xi^2 V;  max|Cv - Cv_cl| over T >= 1: 6.7e-03;  within 0.01 of Cv_cl for T >= 0.848
+  quantum Cv - exact classical Cv: max -0.0014 at T = 13.3  (vs the pipeline's curve: max +0.1309)
+  [figure] figures/T6-T9_pipeline_vs_correct.png
+
+==============================================================================
+T10 Secondary defects in the same engine, counted over every sweep above
+==============================================================================
+  S1 tail-pick: converge_xi (Classical_Limit_Numerical.py:168-172) takes the LAST step with
+     |dCv| < TOL_XI (absolute), which can sit in the collapsing finite-N tail.
+  S2 fallback: sweep_temperature_range (Classical_Limit_Numerical.py:343-353) stores
+     converge_n at xi = 1 -- the quantum Cv at T -- as the classical limit when xi fails.
+  HO (DVR, pipeline run)             plateau  410   S1 tail    0   S2 fallback   90   NaN    0
+  box                                plateau  220   S1 tail   30   S2 fallback   50   NaN    0
+  x^4 (DVR)                          plateau  300   S1 tail    0   S2 fallback    0   NaN    0
+  PT                                 plateau  284   S1 tail   16   S2 fallback    0   NaN    0
+  double well (DVR, pipeline run)    plateau 1000   S1 tail    0   S2 fallback    0   NaN    0
+
+Total time 5.5 min
