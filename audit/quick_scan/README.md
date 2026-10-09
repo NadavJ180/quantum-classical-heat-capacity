@@ -8,13 +8,15 @@ Does [`src/Quick_Scan.py`](../../src/Quick_Scan.py) give the same answer as the 
 | [`QUICK_SCAN_VALIDATION.txt`](QUICK_SCAN_VALIDATION.txt) | The results: time, DVR solves, quantum and classical errors, true error ÷ estimate, verdicts. |
 | [`full_resolution_section7.npz`](full_resolution_section7.npz) | Per-variant quantum and classical curves of the full-resolution Section 7 run (config.py settings, 1000 temperatures, 2026-10-09; summarized in [`../classical_limit/SECTION7_RESULTS.txt`](../classical_limit/SECTION7_RESULTS.txt)). Stored so the comparison doesn't need a ~44-minute rerun. |
 | `figures/.../quick_scan/` | The three quick-scan figures of that run. |
+| [`merge_check.py`](merge_check.py) | Checks the high-temperature argument behind the quick scan's merge limit $T_{\text{merge}}$: the DVR's $C_v^q-C_v^{cl}$ against the leading Wigner–Kirkwood term, for the HO, $x^4$ and the double well at b = −0.5 and b = −10 (a few minutes). |
+| [`MERGE_CHECK.txt`](MERGE_CHECK.txt) | Its results: the ratio to the formula reaches 0.998–1.000 at the hottest temperatures, with slopes −2 (harmonic) and −1.5 (quartic), as predicted. |
 
 **Result** (with `RememberedPotential`; the first run, before it, took 5.0, 10.6 and 9.9 min with bit-identical numbers).
 
 | resolution | run | time | quantum vs full pipeline | classical error vs exact | true error ÷ estimate | wrong resolved verdicts |
 |---|---|---|---|---|---|---|
 | 1 | six-variant sweep | 2.0 min | ≤ 1.5e-7 | ≤ 5.2e-3 | 1.03–1.10 | 0 |
-| 2 | six-variant sweep | 4.6 min | ≤ 1.8e-9 | ≤ 3.0e-3 | 1.01–1.04 | 0 |
-| 3 | b = −0.5 | 6.1 min | 2.2e-12 | 8.4e-4 | 1.01 | 0 |
+| 2 | six-variant sweep | 4.4 min | ≤ 1.8e-9 | ≤ 3.0e-3 | 1.01–1.04 | 0 |
+| 3 | b = −0.5 | 6.6 min | 2.2e-12 | 8.4e-4 | 1.01 | 0 |
 
 Every b came out "below" (no quantum excess), the same conclusion as the full run. The exact classical $C_v$ is used here only as an independent check; the quick scan itself is fully numerical (the ξ-scan).

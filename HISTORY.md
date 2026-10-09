@@ -150,6 +150,12 @@ A first validation pass also exposed two problems, both fixed before the pass wa
 - **The fix.** The quick scan now estimates the grid each temperature needs, from the engine's own WKB sizing, before solving. Temperatures beyond `QUICK_SCAN_MAX_GRID` (6,000 points) are skipped, and the hottest feasible temperature is printed: T ≈ 1,170 for b = −10 at resolution 1. A window that is too hot everywhere stops immediately with that explanation.
 - **The validation** now pins its own potential and temperature window, so local experiments in `config.py` cannot change what it checks.
 
+**A physical limit instead of a grid limit.** The grid limit answered "can this temperature be computed?", but not "does it need to be?", and it added a knob with no physical meaning. It was removed and replaced by a per-potential merge temperature $T_{\text{merge}}$.
+- **The physics.** The Wigner–Kirkwood expansion gives $C_v^q-C_v^{cl}=-k_B\beta^2g''(\beta)+O(\hbar^4)$ with $g=\frac{\hbar^2}{24m}\beta^2\langle V''\rangle_{cl}$. For a $|x|^k$ tail this falls off as $T^{-(1+2/k)}$: $-(\beta\hbar\omega)^2/12$ for the HO, $T^{-3/2}$ for a quartic. The sketch and its caveats are in FINDINGS, "Why Quantum and Classical $C_v$ Merge at High T".
+- **The check.** It was verified numerically against the DVR ([`merge_check.py`](audit/quick_scan/merge_check.py)): the ratio to the formula reaches 0.998–1.000 at the hottest temperatures checked, with slopes −2.00 (HO), −1.50 ($x^4$), −1.56 (double well b = −0.5) and −2.00 (b = −10).
+- **The limit.** The quick scan probes $C_v^q-C_v^{cl}$ at $T_0, 2T_0, 4T_0,\dots$, with $T_0=10\max(E_1-E_0,\hbar\omega_{\min})$, until two consecutive probes agree within `tol_xi` and fall at least as fast as 1/T. Temperatures above $T_{\text{merge}}$ are not computed. The console says that quantum = classical there and how many levels they would have needed. A window wholly above it gets the verdict "merged".
+- **Results.** For b = −10, $T_{\text{merge}}\approx301$ (slope −2.0), and the T = 10⁴–10⁵ window that had crashed is answered "merged" in 72 s. For the base double well, $T_{\text{merge}}\approx22.4$ (slope −1.6). Default windows never reach $T_0$ and are unchanged; the re-run validation reproduces its numbers.
+
 ## Version History
 
 Pre-reorganization filenames carried explicit version suffixes (e.g. `DVR_Algorithm_1_4.py`); current files no longer do. This table records the module-level changes that shaped the current design.
@@ -181,3 +187,4 @@ Pre-reorganization filenames carried explicit version suffixes (e.g. `DVR_Algori
 | `Cv_Coefficient_Sweep` | 1.2 | `plot_coefficient_sweep` takes an optional title and save location (`title`, `category`, `name`) and returns the figure path, so the quick scan can reuse it |
 | `Quick_Scan` | 1.0 | New: quick, low-resolution quantum vs. classical $C_v(T)$ for one potential or a coefficient sweep, with a resolved/unresolved verdict; reuses the pipeline's functions |
 | `Quick_Scan` | 1.1 | `RememberedPotential` (bit-identical, ~2.5× faster, engine untouched); temperatures too hot for a DVR skipped, with the hottest feasible one reported (`QUICK_SCAN_MAX_GRID`) |
+| `Quick_Scan` | 1.2 | `QUICK_SCAN_MAX_GRID` removed: temperatures above the potential's merge temperature $T_{\text{merge}}$ (quantum = classical within `tol_xi`, shown by probes in the Wigner–Kirkwood regime) are not computed; verdict "merged" |

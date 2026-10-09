@@ -1,0 +1,41 @@
+High-temperature merge check, 2026-10-09 18:36: Cv_q - Cv_cl against the leading Wigner-Kirkwood term
+
+HO, V = x^2/2: 838 DVR levels (covering 30 k_B T at T = 20), 35s
+  |  T | Cv_q - Cv_cl | WK prediction | ratio |
+  |---|---|---|---|
+  | 1 | -7.933e-02 | -8.333e-02 | 0.952 |
+  | 2 | -2.058e-02 | -2.083e-02 | 0.988 |
+  | 5 | -3.327e-03 | -3.333e-03 | 0.998 |
+  | 10 | -8.329e-04 | -8.333e-04 | 1.000 |
+  | 20 | -2.083e-04 | -2.083e-04 | 1.000 |
+  slope of |Cv_q - Cv_cl| between the two hottest T: -2.00 (expected -2)
+
+quartic, V = x^4: 222 DVR levels (covering 30 k_B T at T = 40), 2s
+  |  T | Cv_q - Cv_cl | WK prediction | ratio |
+  |---|---|---|---|
+  | 1 | -1.180e-01 | -1.267e-01 | 0.931 |
+  | 2 | -4.106e-02 | -4.481e-02 | 0.916 |
+  | 5 | -1.097e-02 | -1.134e-02 | 0.968 |
+  | 10 | -3.959e-03 | -4.008e-03 | 0.988 |
+  | 20 | -1.411e-03 | -1.417e-03 | 0.996 |
+  | 40 | -5.002e-04 | -5.010e-04 | 0.998 |
+  slope of |Cv_q - Cv_cl| between the two hottest T: -1.50 (expected -1.5)
+
+double well b = -0.5: 314 DVR levels (covering 30 k_B T at T = 40), 5s
+  |  T | Cv_q - Cv_cl | WK prediction | ratio |
+  |---|---|---|---|
+  | 2 | -6.455e-02 | -7.595e-02 | 0.850 |
+  | 5 | -8.403e-03 | -8.801e-03 | 0.955 |
+  | 10 | -2.296e-03 | -2.331e-03 | 0.985 |
+  | 20 | -7.276e-04 | -7.309e-04 | 0.995 |
+  | 40 | -2.475e-04 | -2.478e-04 | 0.999 |
+  slope of |Cv_q - Cv_cl| between the two hottest T: -1.56 (expected -> -1.5 (quartic at large |x|))
+
+double well b = -10: 1174 DVR levels (covering 30 k_B T at T = 800), 110s
+  |  T | Cv_q - Cv_cl | WK prediction | ratio |
+  |---|---|---|---|
+  | 100 | -7.491e-03 | -7.525e-03 | 0.995 |
+  | 200 | -1.879e-03 | -1.881e-03 | 0.999 |
+  | 400 | -4.702e-04 | -4.703e-04 | 1.000 |
+  | 800 | -1.176e-04 | -1.176e-04 | 1.000 |
+  slope of |Cv_q - Cv_cl| between the two hottest T: -2.00 (expected -2 (harmonic deep well, hbar omega = 30))

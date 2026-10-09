@@ -216,13 +216,6 @@ ref_label = reference_label(REFERENCE_SPAN_FACTOR, REFERENCE_DX_FACTOR)
 QUICK_SCAN_MODE       = "sweep"
 QUICK_SCAN_RESOLUTION = 1
 QUICK_SCAN_BETA_RANGE = None
-# Approximate largest DVR grid (points) the quick scan attempts. The
-# thermally accessible level count grows with T, and every DVR solve is a
-# dense matrix: ~grid^3 time (measured here: 1 s at 2,000 points, 6 s at
-# 4,000, 44 s at 8,000; each xi rung takes ~5 solves) and 8 grid^2 bytes.
-# Hotter temperatures are skipped with a console note giving the hottest
-# feasible one, instead of an attempt at a matrix that cannot fit.
-QUICK_SCAN_MAX_GRID   = 6000
 QUICK_SCAN_PRESETS = {
     1: dict(n_beta=60,     tol_xi=1e-2,   xi_mult=1.5,     min_stable_xi=2,
             thermal_coverage=12.0, dvr_tolerance=1e-3),

@@ -93,21 +93,71 @@ In practice the reported value approaches the limit from below by almost exactly
 
 **Faster sizing without touching the engine.** About half of a resolution-1 run went to the engine's WKB sizing of each solve: a bisection that re-samples V on the same 40,001-point windows dozens of times. The quick scan hands the engine a potential that remembers its recent evaluations (`RememberedPotential`). Results are bit-identical. A resolution-1 run of the base double well took 10.7 s instead of 26.0 s, and the six-variant sweep 117 s instead of 299 s. `Classical_Limit_Numerical.py` is unchanged, so the full pipeline is unaffected.
 
-**Why very hot temperatures are out of reach, and why little is lost.** The scan keeps every level up to $E_0+$ `thermal_coverage`·$k_BT$, and the number of levels below an energy E is $N(E)\approx\frac1{\pi\hbar}\oint p\,dx$ (WKB). That number grows with T (∝ T for a harmonic well, ∝ $T^{3/4}$ for a quartic one), and ∝ ξ, because ξ²V has the level density of V at ħ/ξ. The DVR grid is at least 4N points, and a dense solve costs ∝ grid³ in time and 8·grid² bytes. The quick scan estimates this grid from the engine's own sizing before solving, and skips temperatures above `QUICK_SCAN_MAX_GRID`.
+**The merge limit $T_{\text{merge}}$: no computing where nothing can differ.** At high T the quantum $C_v$ approaches the classical one as a power law (next subsection). Meanwhile the work grows:
+- the scan keeps every level up to $E_0+$ `thermal_coverage`·$k_BT$, and the number of levels below an energy E is $N(E)\approx\frac1{\pi\hbar}\oint p\,dx$ (WKB), which grows with T (∝ T for a harmonic well, ∝ $T^{3/4}$ for a quartic one);
+- the DVR grid is at least 4N points, and a dense solve costs ∝ grid³.
 
-The example that prompted this is b = −10. Its deep well sits at x ≈ 30 with V ≈ −67,950 and ħω ≈ 30. The region near x = 0 lies about 68,000 higher, so it only becomes accessible at $k_BT\sim10^4$. At resolution 1, one solve would need:
+So, for each potential, the quick scan establishes a temperature above which there is nothing left to compute:
+- **Probe ladder.** When the window reaches above $T_0 = 10\max(E_1-E_0,\ \hbar\omega_{\min})$, it computes $d = C_v^q - C_v^{cl}$ at $T_0, 2T_0, 4T_0,\dots$ with the same ξ-scan and settings.
+  - $10(E_1-E_0)$ is the pipeline's own "T → ∞" checkpoint.
+  - $\hbar\omega_{\min}=\hbar\sqrt{V''(x_{\min})/m}$ guards against a tunnelling doublet, whose tiny $E_1-E_0$ would start the ladder far too cold.
+- **Acceptance.** $T_{\text{merge}}$ is the colder of the first two consecutive probes that both have $|d| + 2\varepsilon \le$ `tol_xi`, and between which |d| falls at least as fast as 1/T (or the hotter |d| is within its error). That is the asymptotic regime, where |d| ∝ $T^{-p}$ with p ≥ 1 and keeps falling.
+- **Output.** Temperatures above $T_{\text{merge}}$ are not computed. The console says that quantum = classical within `tol_xi` there, shows the two accepting probes and the slope, and gives the number of levels those temperatures would have needed. A window lying wholly above $T_{\text{merge}}$ gets the verdict **merged**.
+- **What it is.** $T_{\text{merge}}$ is an upper bound on where the curves first agree within the tolerance, since the ladder starts at $T_0$. Default windows, which end at $10(E_1-E_0) \le T_0$, never need it.
 
-| T | levels (at the plateau's ξ = 2.25) | dense matrix |
-|---|---|---|
-| 10³ | ~1,300 | ~0.2 GB |
-| 10⁴ | ~21,000 | ~56 GB |
-| 10⁵ | ~127,000 | ~2 TB |
+Examples at resolution 1 (`tol_xi` = 1e-2):
 
-The last row is the 379 GiB allocation error at ξ = 1, before this guard existed. At those temperatures, however, $k_BT$ is hundreds of level spacings. The quantum correction to $C_v$ is then of order $(\beta\hbar\omega)^2/12\sim10^{-6}$–$10^{-5}$ (Wigner–Kirkwood). Whatever the classical $C_v$ does there, the quantum one follows it to far better than any resolution here, so no quantum excess can be resolved in that range.
+| potential | $T_0$ | $T_{\text{merge}}$ | d at $T_{\text{merge}}$, $2T_{\text{merge}}$ | slope | levels the skipped temperatures would need |
+|---|---|---|---|---|---|
+| b = −10, window T = 10⁴–10⁵ | 301 | 301 | −6.6e-4, −1.6e-4 | −2.0 | ~9,300–56,000 (the old 379 GiB error) |
+| b = −0.5, window up to T = 200 | 22.4 | 22.4 | −4.9e-4, −1.7e-4 | −1.6 | ~110–520 |
+
+The b = −10 window lies wholly above $T_{\text{merge}}$, so it is answered in 72 s with the verdict "merged", without any solve in the window itself.
 
 **Reading "quantum above classical".** Each classical value carries the scan's estimate ε of its remaining distance to the limit, and the true error tracks it to within ~10% (results below). The difference d = $C_v^q-C_v^{cl}$ counts as resolved only where |d| > 2ε. The margin is needed because the approach is one-sided: a coarse classical value sits *below* the limit by about ε, so the measured d is shifted upward by about ε. Wherever the true d is close to zero, a margin of 1 could therefore turn it into a false "above". With 2, that would need the error to exceed twice its estimate.
 
 At high T the two curves merge: the quantum correction falls off as ħ²β² (Wigner–Kirkwood), so d → 0. At the hottest temperatures |d| eventually drops below any finite ε, and an unresolved band at the hot end is expected at any resolution. Unresolved temperatures elsewhere mean the resolution is too low for that window.
+
+### Why Quantum and Classical $C_v$ Merge at High T
+
+**The expansion.** Wigner (1932) and Kirkwood (1933) wrote the quantum partition function as a phase-space integral with a power series in ħ:
+
+$$Z_q=\frac1{2\pi\hbar}\iint dx\,dp\;e^{-\beta H(x,p)}\Big[1+\hbar^2\,w_2(x,p;\beta)+O(\hbar^4)\Big],\qquad H=\frac{p^2}{2m}+V(x).$$
+
+The $\hbar^0$ term is the classical partition function $Z_{cl}$. The $\hbar^2$ term comes from the non-commutativity of $p^2/2m$ and $V$ in $e^{-\beta H}$. Doing the Gaussian p-integral and integrating by parts once, using $\int V''e^{-\beta V}dx=\beta\int V'^2e^{-\beta V}dx$, leaves a single correction:
+
+$$Z_q=Z_{cl}\Big[1-\frac{\hbar^2\beta^2}{24m}\langle V''\rangle_{cl}+O(\hbar^4)\Big],\qquad F_q=F_{cl}+\frac{\hbar^2\beta}{24m}\langle V''\rangle_{cl}+O(\hbar^4),$$
+
+where $\langle\cdot\rangle_{cl}$ is the classical configuration average with weight $e^{-\beta V}$.
+
+**From F to $C_v$.** Write $g(\beta)=\beta\,\Delta F=\frac{\hbar^2}{24m}\beta^2\langle V''\rangle_{cl}$. Then $\Delta U=g'(\beta)$ and $\Delta C_v=-k_B\beta^2\,\partial_\beta\Delta U$, so
+
+$$\frac{C_v^q-C_v^{cl}}{k_B}=-\beta^2\,g''(\beta)+O(\hbar^4).$$
+
+**Check on the HO.** $V''=m\omega^2$ gives $g=\hbar^2\omega^2\beta^2/24$ and $\Delta C_v/k_B=-(\beta\hbar\omega)^2/12$. That is exactly the first term of the Einstein formula, $C_v/k_B=\frac{(\beta\hbar\omega/2)^2}{\sinh^2(\beta\hbar\omega/2)}=1-\frac{(\beta\hbar\omega)^2}{12}+\dots$
+
+**How fast the difference vanishes.** At high T the particle explores the large-|x| part of the potential, where $V\approx c|x|^k$. There, x scales as $T^{1/k}$ and $V''\propto|x|^{k-2}$, so $\langle V''\rangle\propto T^{1-2/k}$, $g\propto\beta^{1+2/k}$, and
+
+$$C_v^q-C_v^{cl}\;\propto\;-\hbar^2\,T^{-(1+2/k)}:\qquad T^{-2}\ \text{(harmonic)},\quad T^{-3/2}\ \text{(quartic)}.$$
+
+The exponent is always above 1, so once this regime is reached the difference keeps falling. For these potentials it falls from below: the quantum $C_v$ approaches the classical one from underneath.
+
+**Physical meaning.** The expansion parameter is $(\beta\hbar\omega_{\text{loc}})^2=(\hbar\omega_{\text{loc}}/k_BT)^2$, with $\omega_{\text{loc}}=\sqrt{V''/m}$ the local vibration frequency. Equivalently, the thermal de Broglie wavelength $\lambda=\hbar\sqrt{\beta/m}$ is small compared with the length on which V changes. Quantum effects matter only while $k_BT$ is comparable to the vibrational quanta. Once many levels are populated, the sum over levels becomes the phase-space integral (the correspondence principle).
+
+**Caveats.**
+- The series is asymptotic and assumes a smooth V. Hard walls give corrections of order ħ instead: the box's quantum $C_v$ overshoots ½ (peak 0.5625 at $k_BT\approx2.9E_1$) and approaches it from above.
+- At intermediate T the difference can be large and of either sign: tunnelling doublets, or two wells with different frequencies. The expansion only describes the regime $k_BT\gg$ every relevant ħω, which is what $T_{\text{merge}}$ tests for numerically.
+
+**Numerical check** ([`audit/quick_scan/merge_check.py`](audit/quick_scan/merge_check.py), [`MERGE_CHECK.txt`](audit/quick_scan/MERGE_CHECK.txt)). The DVR's $C_v^q-C_v^{cl}$ (with the exact classical value, used here only as a check) is compared with $-\beta^2g''(\beta)$ ($\langle V''\rangle$ by quadrature):
+
+| potential | T | $C_v^q-C_v^{cl}$ | Wigner–Kirkwood | ratio | slope of $\lvert d\rvert$ (expected) |
+|---|---|---|---|---|---|
+| HO | 20 | −2.083e-4 | −2.083e-4 | 1.000 | −2.00 (−2) |
+| $x^4$ | 40 | −5.002e-4 | −5.010e-4 | 0.998 | −1.50 (−1.5) |
+| double well b = −0.5 | 40 | −2.475e-4 | −2.478e-4 | 0.999 | −1.56 (→ −1.5) |
+| double well b = −10 | 800 | −1.176e-4 | −1.176e-4 | 1.000 | −2.00 (−2, deep well ħω ≈ 30) |
+
+At lower T the ratio drops (0.85–0.95 at the coldest temperatures checked), as the next, $O(\hbar^4)$, term grows.
 
 ## Findings So Far
 
@@ -141,15 +191,15 @@ At high T the two curves merge: the quantum correction falls off as ħ²β² (Wi
 
 - **b = −10 (quick scan, resolution 1).** The deep well is nearly harmonic (ħω ≈ 30).
   - The quantum $C_v$ is below the classical one at every temperature computed, T = 1 to ≈1,170. The two merge to within a few 1e-5 by T ≈ 1,000, as the harmonic estimate $(\beta\hbar\omega)^2/12\approx6\times10^{-5}$ predicts.
-  - The second region (x ≈ 0, ~68,000 above the deep minimum) is out of DVR reach, for the reason above.
+  - The second region (x ≈ 0, ~68,000 above the deep minimum) opens only at $k_BT\sim10^4$. That is far above this potential's $T_{\text{merge}}\approx301$: there $C_v^q$ and $C_v^{cl}$ differ by ~1e-5 (≈ $(\beta\hbar\omega)^2/12$), while a DVR would need 10⁴–10⁵ levels. So no quantum excess can appear there.
 
 - **Quick scan, validated on the same sweep** ([`audit/quick_scan/QUICK_SCAN_VALIDATION.txt`](audit/quick_scan/QUICK_SCAN_VALIDATION.txt)). It was compared with the full pipeline (the stored full-resolution Section 7 curves and the 500-level quantum curves) and with the exact classical $C_v$:
 
   | resolution | run | time | quantum vs full pipeline | classical error vs exact | true error ÷ estimate | wrong resolved verdicts |
   |---|---|---|---|---|---|---|
   | 1 | six-variant sweep | 2.0 min | ≤ 1.5e-7 | ≤ 5.2e-3 | 1.03–1.10 | 0 |
-  | 2 | six-variant sweep | 4.6 min | ≤ 1.8e-9 | ≤ 3.0e-3 | 1.01–1.04 | 0 |
-  | 3 | b = −0.5 only | 6.1 min | 2.2e-12 | 8.4e-4 | 1.01 | 0 |
+  | 2 | six-variant sweep | 4.4 min | ≤ 1.8e-9 | ≤ 3.0e-3 | 1.01–1.04 | 0 |
+  | 3 | b = −0.5 only | 6.6 min | 2.2e-12 | 8.4e-4 | 1.01 | 0 |
 
   - **Resolution 1 reaches the full run's conclusion in 2 minutes instead of ~44:** every b below its own classical limit at every temperature. The closest approach is at the hottest temperature, by about 1e-3, still resolved there (|d| ≈ 4ε).
   - **The error estimate is honest at low resolution too.** The coarse classical value always sits below the limit, by about its own estimate.
@@ -188,7 +238,6 @@ At high T the two curves merge: the quantum correction falls off as ħ²β² (Wi
 | `AUTO_ESCALATE`, `MAX_ESCALATION_ROUNDS`, `NUM_STATES_GROWTH`, `NUM_STATES_CAP`, `XI_START_GROWTH`, `MAX_XI_STEPS_GROWTH`, `ESCALATION_FRACTION_THRESHOLD` | Control the auto-tune loop (see README). Meant to be touched rarely. |
 | `SCAN_PARAM`, `SCAN_STEP`, `SCAN_COUNT`, `SCAN_SYMMETRIC_VALUE` | Section 7: which coefficient is swept, its spacing, the extra variants per side, and an optional symmetric reference value. The quick scan's `"sweep"` mode uses the same four. |
 | `QUICK_SCAN_MODE`, `QUICK_SCAN_RESOLUTION`, `QUICK_SCAN_BETA_RANGE` | `Quick_Scan.py`: one potential (`"single"`) or the Section 7 sweep (`"sweep"`); which preset; an optional (β_min, β_max) zoom window (`None` = `BETA_MIN`/`BETA_MAX`). |
-| `QUICK_SCAN_MAX_GRID` | Approximate largest DVR grid (points) the quick scan attempts (default 6,000). Hotter temperatures are skipped as "too hot", with the hottest feasible one printed. A solve costs ∝ grid³. |
 | `QUICK_SCAN_PRESETS` | Per resolution: `n_beta`, `tol_xi`, `xi_mult`, `min_stable_xi`, `thermal_coverage` and `dvr_tolerance`, with the same meanings as the pipeline's `N_BETA`, `TOL_XI`, `XI_MULT`, `MIN_STABLE_XI` and `HOT_STATE_SAFETY`, and the DVR's 3-pass tolerance. The ladder always runs from `XI_START` up to `XI_MAX`. Resolution 3 is the full pipeline's own settings. |
 
 **Section 6 reference factors.** With 2/2, Section 6's classical reference sweep took ~36 min for the double well. Lighter factors agree with the base curve equally well, all at round-off. The default is therefore 1.5/1.5, with 2/2 kept as the `CLASSICAL_REFERENCE_PRECISE` option:
@@ -221,5 +270,5 @@ The auto-tune loop handles the two common cases automatically (README, "Auto-Tun
 - **A long run seems stuck at the cold end.** The largest-ξ solves are the most expensive (several seconds each in Sections 1 & 4, and longer on Section 6's refined grids). The progress bar's rate slows there, which is expected.
 - **Section 6's classical error panel is not at round-off level.** Re-run it with `CLASSICAL_REFERENCE_PRECISE = True` to see whether the difference persists on the stricter 2/2 grid. If it does, the base grid of the scaled solves is not converged.
 - **Quick scan verdict "unresolved" outside the hot tail.** The difference between the curves there is within the classical value's error at this resolution. Raise `QUICK_SCAN_RESOLUTION`, or zoom with `QUICK_SCAN_BETA_RANGE` onto that window (cheaper without the cold end) and raise it there.
-- **Quick scan says "too hot", or stops at once.** The window contains temperatures whose DVR would exceed `QUICK_SCAN_MAX_GRID` points: too many thermally accessible levels. Use the hottest feasible temperature it prints as the hot end of `QUICK_SCAN_BETA_RANGE`. Raising the limit is possible, but each doubling costs ~8× in time. At such temperatures the quantum and classical $C_v$ agree to $O((\hbar\omega/k_BT)^2)$ anyway.
+- **Quick scan skips the hottest temperatures, or says "merged".** Those temperatures lie above the potential's $T_{\text{merge}}$, where the quantum and classical $C_v$ agree within `tol_xi` and would need many more levels; nothing is lost. To see the curves there anyway, use a finer resolution (a smaller `tol_xi` puts $T_{\text{merge}}$ higher), knowing that the level count grows with T.
 - **Quick scan classical curve has gaps (†).** The ladder hit `XI_MAX` (`xi_cap`) or a solve failed. Narrow the window to warmer temperatures, or raise `XI_MAX` deliberately.

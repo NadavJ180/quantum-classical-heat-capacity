@@ -316,7 +316,7 @@ Compared with the full pipeline (the stored full-resolution Section 7 curves, [`
   - Differences print in scientific format: −0.0000 hid differences of 1e-5.
 - **Docstring.** The module docstring has two new sections.
 
-**`src/config.py`:** `QUICK_SCAN_MAX_GRID` = 6000. It is a soft limit, since the estimate can fall a few percent short.
+**`src/config.py`:** `QUICK_SCAN_MAX_GRID` = 6000. It is a soft limit, since the estimate can fall a few percent short. *(Removed in 8e.)*
 
 **`audit/quick_scan/validate_quick_scan.py`:** pins the validated setup (b = −0.5, `BETA_MAX` 50, no zoom window, the b sweep) with `setattr` on `config`, so local experiments in `config.py` cannot change what it checks.
 
@@ -330,3 +330,52 @@ Compared with the full pipeline (the stored full-resolution Section 7 curves, [`
 - **README:** the quick-scan section explains the speed-up and the "too hot" temperatures (with the b = −10 example), and the usage gains a "too hot" case.
 - **FINDINGS:** the "Quick Scan" physics subsection covers the speed-up and why very hot temperatures are out of reach yet cost little. Results gain a b = −10 entry; parameters, `QUICK_SCAN_MAX_GRID`; troubleshooting, a "too hot" entry.
 - **HISTORY:** the chapter continues with both changes; new version row `Quick_Scan` 1.1.
+
+### 8e. Follow-up: the grid limit replaced by the merge temperature $T_{\text{merge}}$
+
+**Why.** The grid limit only answered whether a temperature *can* be computed. The better question is whether it *needs* to be. Above some temperature the quantum and classical $C_v$ agree within the scan's own tolerance, and computing there only costs ever more levels.
+
+**`src/config.py`:** `QUICK_SCAN_MAX_GRID` removed.
+
+**`src/Quick_Scan.py`**
+- **Removed:** `_estimated_grid` and `hottest_feasible_T`.
+- **`estimated_levels(spectra, T)`:** the engine's own level sizing at ξ = 1. Used only to say how many levels the skipped temperatures would need.
+- **`merge_temperature(...)`:**
+  - The probe ladder is $T_0, 2T_0, 4T_0,\dots$, with $T_0=10\max(E_1-E_0,\hbar\omega_{\min})$. $\hbar\omega_{\min}$ comes from a central difference of V at the minimum the engine located.
+  - Each probe is one single-temperature run of the same `sweep_temperature_range` and settings (`_difference_at`), sharing the potential's `ScaledSpectra` cache.
+  - $T_{\text{merge}}$ is the colder of the first two consecutive probes with $|d|+2\varepsilon\le$ `tol_xi` whose |d| falls at least as fast as 1/T (or whose hotter |d| is within 2ε).
+  - The status is "not needed" (window ≤ $T_0$), "found", "not found" (up to 20 doublings, or past the window), or "failed" (e.g. a `MemoryError`).
+- **`scan_potential`:** temperatures above $T_{\text{merge}}$ are not computed: both curves are NaN there and `skipped` marks them. A note gives the two probes, the slope and the level count. It no longer raises when the whole window is above the limit.
+- **`compare_quantum_classical`:** gains the verdict "merged" (every temperature above $T_{\text{merge}}$).
+- **`run_quick_scan`:**
+  - The summary columns "T_merge" and "above it" replace "too hot".
+  - A "merged" potential has no curve in the figure.
+  - The `MemoryError` hint now says the temperatures need too many levels and that quantum ≈ classical there.
+
+**`audit/quick_scan/merge_check.py` → `MERGE_CHECK.txt`.** It compares the DVR's $C_v^q-C_v^{cl}$ (the exact classical value is used only as a check) with the leading Wigner–Kirkwood term $-\beta^2g''(\beta)$:
+
+| potential | hottest T | ratio to the formula | slope (expected) |
+|---|---|---|---|
+| HO | 20 | 1.000 | −2.00 (−2) |
+| $x^4$ | 40 | 0.998 | −1.50 (−1.5) |
+| double well b = −0.5 | 40 | 0.999 | −1.56 (→ −1.5) |
+| double well b = −10 | 800 | 1.000 | −2.00 (−2) |
+
+**Runs.**
+
+| potential, window | T_merge | probes (T: d) | slope | computed | time |
+|---|---|---|---|---|---|
+| b = −10, T = 10⁴–10⁵ (the crash) | 301 | 301: −6.6e-4; 601: −1.6e-4 | −2.0 | 0 of 60 ("merged"; the window would need 9,271–56,386 levels) | 72 s |
+| b = −10, T = 10–10⁴ | 301 | (same) | −2.0 | 30 of 60 | 79 s |
+| b = −0.5, T = 0.02–200 | 22.4 | 22.4: −4.9e-4; 44.7: −1.7e-4 | −1.6 | 45 of 60 | 19 s |
+| HO, window up to T = 100 (Anaconda 3.7) | 10 | 10: −6.6e-4; 20: −1.6e-4 | −2.0 | — | — |
+
+The default windows end at $10(E_1-E_0)\le T_0$, so they never probe. The validation was re-run and reproduces its numbers.
+
+**Documentation.**
+- **FINDINGS:**
+  - a new physics subsection, "Why Quantum and Classical $C_v$ Merge at High T": the Wigner–Kirkwood sketch, the HO check, the $T^{-(1+2/k)}$ law, its physical meaning, caveats, and the numerical check;
+  - the merge limit in the quick-scan subsection, replacing the grid-limit text;
+  - the b = −10 entry, the parameters table (the knob removed) and troubleshooting, updated.
+- **README:** the quick-scan section explains $T_{\text{merge}}$ and the "merged" verdict.
+- **HISTORY:** the chapter continues with this replacement; new version row `Quick_Scan` 1.2.

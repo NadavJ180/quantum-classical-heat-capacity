@@ -16,7 +16,7 @@ Other documents:
 - [`FINDINGS.md`](FINDINGS.md): the physics behind each step, how to read the diagnostic plots, and current results.
 - [`HISTORY.md`](HISTORY.md): how the pipeline got here, including the classical-limit correction.
 - [`audit/classical_limit/`](audit/classical_limit/): the audit, the change log and the verification scripts for that correction. [`CHANGES.md`](audit/classical_limit/CHANGES.md) there is the file-by-file change log of the whole branch, including the Section 6 grid and the quick scan.
-- [`audit/quick_scan/`](audit/quick_scan/): the quick scan's validation against the full pipeline and the exact classical $C_v$.
+- [`audit/quick_scan/`](audit/quick_scan/): the quick scan's validation against the full pipeline and the exact classical $C_v$, and the numerical check of the high-temperature merge (Wigner–Kirkwood).
 - [`docs/summaries/IEEE_Summary.tex`](docs/summaries/IEEE_Summary.tex) (the project report) and [`docs/summaries/Meetings_Summary.tex`](docs/summaries/Meetings_Summary.tex) (meeting notes and derivations). The report still describes the classical-limit method as it was before the correction.
 
 ---
@@ -88,7 +88,7 @@ Only the potential block of `config.py` needs editing to run on a new potential.
 | Section 6 | ~10 min with the default 1.5 / 1.5 classical reference; ~36 min with `CLASSICAL_REFERENCE_PRECISE = True` (2 / 2) |
 | Section 7 | ~6–8 min per non-base variant (one classical sweep each); ~37 min for the default six-variant sweep |
 | **Full run** | **~1 h** (~1.4 h with the precise Section 6 reference) |
-| `Quick_Scan.py` (separate) | resolution 1: ~20 s per potential (2 min for the six-variant sweep); resolution 2: ~50 s per potential (4.6 min); resolution 3 (the full settings): ~6 min per potential |
+| `Quick_Scan.py` (separate) | resolution 1: ~20 s per potential (2 min for the six-variant sweep); resolution 2: ~45 s per potential (4.4 min); resolution 3 (the full settings): ~6–7 min per potential |
 
 ## Classical Limit
 
@@ -154,19 +154,23 @@ Only the settings are coarser. The quantum spectrum costs nothing extra: the ξ 
 
 The engine re-evaluates V on the same grids many times while sizing each solve. The quick scan hands it a potential that remembers its recent evaluations (`RememberedPotential`), which makes it about 2.5 times as fast. The results are bit-identical, and the classical-limit engine itself is untouched.
 
-**Temperatures too hot for a DVR.** Every temperature needs all its thermally accessible levels, and their number grows with T. A dense DVR solve costs ~grid³ time and 8·grid² bytes (measured here: 1 s at 2,000 points, 6 s at 4,000, 44 s at 8,000). Before solving, the quick scan therefore estimates the grid each temperature needs, from the engine's own level sizing:
-- temperatures needing more than `QUICK_SCAN_MAX_GRID` points (default 6,000; a soft limit) are skipped and reported as "too hot", with the hottest feasible temperature;
-- a window that is too hot everywhere stops at once with that explanation, instead of attempting a matrix that cannot fit in memory.
+**Where quantum and classical merge ($T_{\text{merge}}$).** At high T the quantum $C_v$ approaches the classical one as a power law: the difference is $-(\beta\hbar\omega)^2/12$ for a harmonic well, and ∝ $T^{-(1+2/k)}$ for a $|x|^k$ tail (FINDINGS, "Why Quantum and Classical $C_v$ Merge at High T"). Computing there is unnecessary, and increasingly expensive: every temperature needs all its thermally accessible levels, and a dense DVR solve costs ~grid³.
 
-For example, b = −10 has ħω ≈ 30 in its deep well, and its second region opens only at $k_BT\sim10^4$. There, a single solve of the ξ-scan would need ~2×10⁴ levels, i.e. a 56 GB matrix (resolution 1). Physically little is lost: at $k_BT$ of hundreds of level spacings, the quantum corrections to $C_v$ are of order $(\hbar\omega/k_BT)^2\sim10^{-5}$ (FINDINGS, "The Quick Scan").
+So when the window reaches above $T_0 = 10\max(E_1-E_0,\ \hbar\omega_{\min})$, the quick scan first finds this potential's $T_{\text{merge}}$:
+- it probes $C_v^q-C_v^{cl}$ at $T_0, 2T_0, 4T_0,\dots$ with the same ξ-scan;
+- it accepts the first pair that agrees within `tol_xi` (with the 2ε margin) and is falling at least as fast as 1/T.
+
+Temperatures above $T_{\text{merge}}$ are not computed. The console prints that quantum = classical within `tol_xi` there, the evidence (the two probes and the slope), and how many levels they would have needed. A window lying wholly above $T_{\text{merge}}$ gets the verdict **merged**.
+
+For example, b = −10 (deep well ħω ≈ 30, second region at $k_BT\sim10^4$) has $T_{\text{merge}}\approx301$: its probes give −6.6e-4 at T = 301 and −1.6e-4 at T = 601, falling as $T^{-2.0}$. The window T = 10⁴–10⁵, which would need 9,000–56,000 levels per solve, is answered "merged" in 72 s. Default windows end at $10(E_1-E_0) \le T_0$ and are never affected.
 
 **Resolutions** (`QUICK_SCAN_PRESETS` in `config.py`). Measured on the double well:
 
 | resolution | temperatures | `tol_xi` | ξ ladder | plateau | levels kept up to | DVR tolerance | time per potential | six-variant sweep | classical error (measured) |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | 60 | 1e-2 | ×1.5 | 2 steps | $E_0+12\,k_BT$ | 1e-3 | ~20 s | 2.0 min | ≤ 5.2e-3 |
-| 2 | 150 | 5e-3 | ×1.35 | 2 steps | $E_0+15\,k_BT$ | 1e-4 | ~50 s | 4.6 min | ≤ 3.0e-3 |
-| 3 | 1000 | 2e-3 | ×1.25 | 3 steps | $E_0+20\,k_BT$ | 1e-5 | ~6 min | ≈ Sections 4 + 7 (~44 min) | ≤ 8.4e-4 |
+| 2 | 150 | 5e-3 | ×1.35 | 2 steps | $E_0+15\,k_BT$ | 1e-4 | ~45 s | 4.4 min | ≤ 3.0e-3 |
+| 3 | 1000 | 2e-3 | ×1.25 | 3 steps | $E_0+20\,k_BT$ | 1e-5 | ~6–7 min | ≈ Sections 4 + 7 (~44 min) | ≤ 8.4e-4 |
 
 At every resolution, the quantum curve matched the full pipeline's to ≤ 1.5e-7, and the true classical error was 1.01–1.10 times the scan's own estimate. The details are in [`audit/quick_scan/QUICK_SCAN_VALIDATION.txt`](audit/quick_scan/QUICK_SCAN_VALIDATION.txt).
 
@@ -194,7 +198,7 @@ The console prints one line per potential and a summary table. At high T the qua
    - **below** everywhere: no quantum excess at this resolution. The printed closest approach tells you by how much.
    - **ABOVE**: a candidate. Confirm it at a higher resolution, then with the full pipeline.
    - **unresolved** outside the hot tail, or gaps in a classical curve (†): raise the resolution, or zoom into that window with `QUICK_SCAN_BETA_RANGE` (`--beta-range`) and raise it there. A window that leaves out the cold end is much cheaper.
-   - **too hot** temperatures: the window reaches temperatures where the DVR would need more than `QUICK_SCAN_MAX_GRID` points. Narrow the window to the hottest feasible temperature printed, or raise the limit, knowing that the cost grows as grid³.
+   - **merged**, or temperatures skipped above $T_{\text{merge}}$: the quantum and classical $C_v$ agree within `tol_xi` there (shown numerically, see the note), so there is nothing to look for. A finer resolution (smaller `tol_xi`) moves $T_{\text{merge}}$ up, at a cost that grows with T.
 4. Run the full pipeline (`Quantum_HO_Master.py`) on a candidate that holds up.
 
 The figure is saved to `figures/<system>/<params>/quick_scan/quick_<mode>_res<N>.png`, with `_beta<min>_to_<max>` appended for a zoom window, so a quick scan never overwrites the pipeline's figures.

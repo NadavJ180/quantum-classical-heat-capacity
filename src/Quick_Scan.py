@@ -56,17 +56,26 @@ engine `RememberedPotential(V)`, which returns stored copies for inputs
 it has already seen. The results are bit-identical and the
 classical-limit engine (Classical_Limit_Numerical.py) is unchanged.
 
-TEMPERATURES TOO HOT FOR A DVR
+WHERE QUANTUM AND CLASSICAL MERGE: T_merge
 ---------------------------------------------------------------------
-Every temperature needs all thermally accessible levels, and their
-number grows with T (and with xi). A dense DVR solve costs ~grid^3 time
-and 8 grid^2 bytes, so a hot enough window cannot be computed at all.
-Before solving, `hottest_feasible_T` estimates the grid from the
-engine's own level sizing. Temperatures that would need more than
-config.QUICK_SCAN_MAX_GRID points are skipped (NaN, "too hot" in the
-summary), and the console names the hottest feasible one. Physically
-little is lost there: when k_B T is hundreds of level spacings, the
-quantum corrections to Cv are of order (hbar omega / k_B T)^2.
+At high T the quantum Cv approaches the classical one: the leading
+quantum correction (Wigner-Kirkwood) is of order (hbar omega / k_B T)^2
+and falls off as T^-p with p >= 1 (FINDINGS.md, "Why quantum and
+classical Cv merge at high T"). Computing there is both unnecessary and
+expensive: every temperature needs all its thermally accessible levels,
+whose number grows with T, and a dense DVR solve costs ~grid^3.
+
+So, when the window reaches above T0 = 10 max(E1 - E0, hbar omega_min)
+(the pipeline's own "T -> infinity" checkpoint, 10 (E1 - E0), guarded
+against tunnelling doublets by the vibrational quantum at the minimum),
+`merge_temperature` probes d = Cv_q - Cv_cl at T0, 2 T0, 4 T0, ... with
+this resolution's own settings. T_merge is the first T of two
+consecutive probes that both have |d| + 2 eps <= tol_xi, and whose d
+falls at least as fast as 1/T (or is below the error), i.e. is in the
+asymptotic regime. Temperatures above T_merge are not computed; the
+console says that quantum = classical within tol_xi there and how many
+levels they would need. A window lying wholly above T_merge gets the
+verdict "merged".
 
 READING THE VERDICT: IS THE QUANTUM CV ABOVE THE CLASSICAL ONE?
 ---------------------------------------------------------------------
@@ -194,45 +203,109 @@ class RememberedPotential:
 
 
 # =====================================================================
-# Hot-end feasibility: how large a DVR the xi-scan would need
+# Where quantum and classical merge: the high-temperature limit T_merge
 # =====================================================================
-def _estimated_grid(spectra, T, xi):
-    """
-    Estimated DVR grid (points) and level count for the xi-scan's solve
-    of xi^2 V covering temperature T: the engine's own level sizing
-    (ScaledSpectra._solve: 1.15 x the WKB level count of V at hbar/xi up
-    to E_0 + 1.2 x thermal_coverage x k_B T, plus 10) times the DVR's
-    floor of 4 grid points per level (auto_configure_dvr). Approximate:
-    the actual grid can come out a few percent larger (padding, a grown
-    level count), so QUICK_SCAN_MAX_GRID is a soft limit.
-    """
-    n = 1.15 * _wkb_level_count(spectra.potential_func,
-                                spectra.v_min + 1.2 * spectra.thermal_coverage * T,
-                                spectra.v_min, spectra.mass, spectra.hbar / xi) + 10
-    return 4.0 * n, n
+# Most temperature doublings tried before giving up on finding T_merge.
+MAX_MERGE_PROBES = 20
 
 
-def hottest_feasible_T(spectra, settings, T_hot):
+def estimated_levels(spectra, T):
     """
-    The hottest temperature (<= T_hot) whose xi-scan stays within
-    config.QUICK_SCAN_MAX_GRID grid points. The scan's level count grows
-    with T (more levels are thermally accessible) and with xi (V at
-    hbar/xi has xi times as many levels below a given energy); a plateau
-    needs at least xi = xi_mult^min_stable_xi, so that is the xi checked.
-    Returns T_hot itself when it is feasible.
+    Levels the quantum Cv at temperature T needs (the spectrum of V
+    itself, xi = 1), from the engine's own sizing (ScaledSpectra._solve:
+    1.15 x the WKB level count up to E_0 + 1.2 x thermal_coverage x
+    k_B T, plus 10). The xi-scan needs ~xi times more at a rung xi.
     """
-    xi = settings["xi_mult"] ** settings["min_stable_xi"]
-    limit = config.QUICK_SCAN_MAX_GRID
-    if _estimated_grid(spectra, T_hot, xi)[0] <= limit:
-        return T_hot
-    lo, hi = math.log(T_hot) - 30.0, math.log(T_hot)     # bisection in log T
-    for _ in range(50):
-        mid = 0.5 * (lo + hi)
-        if _estimated_grid(spectra, math.exp(mid), xi)[0] <= limit:
-            lo = mid
-        else:
-            hi = mid
-    return math.exp(lo)
+    return 1.15 * _wkb_level_count(spectra.potential_func,
+                                   spectra.v_min + 1.2 * spectra.thermal_coverage * T,
+                                   spectra.v_min, spectra.mass, spectra.hbar) + 10
+
+
+def _hbar_omega_at_minimum(spectra):
+    """hbar sqrt(V''(x_min) / m) at the minimum the engine located (central
+    difference); 0 if the curvature is not positive (e.g. a pure quartic)."""
+    x = spectra.x_at_min
+    h = 1e-3 * (1.0 + abs(x))
+    v = np.asarray(spectra.potential_func(np.array([x - h, x, x + h])), dtype=float)
+    curvature = (v[0] - 2.0 * v[1] + v[2]) / h**2
+    return spectra.hbar * math.sqrt(curvature / spectra.mass) if curvature > 0 else 0.0
+
+
+def _difference_at(potential_func, spectra, T, settings):
+    """Cv_q - Cv_cl and the classical value's error estimate at one
+    temperature, from the same xi-scan and settings as the scan itself."""
+    beta = np.array([1.0 / T])
+    sweep = sweep_temperature_range(
+        potential_func, beta,
+        config.XI_START, settings["tol_xi"], settings["min_stable_xi"], settings["xi_mult"],
+        settings["max_xi_steps"], config.TOL_CV, config.MIN_STABLE_N,
+        mass=config.MASS, hbar=config.HBAR, thermal_coverage=settings["thermal_coverage"],
+        xi_max=config.XI_MAX, spectra=spectra, verbose=False,
+    )
+    cv_quantum = compute_quantum_heat_capacity_curve(spectra.get(1.0, T), beta, xi=1.0)[0]
+    return float(cv_quantum - sweep["cv_classical"][0]), float(sweep["error_estimate"][0])
+
+
+def merge_temperature(potential_func, spectra, settings, T_hot):
+    """
+    The temperature T_merge above which the quantum and classical Cv of
+    this potential agree within the resolution's tol_xi, shown
+    numerically (module docstring; the physics is in FINDINGS.md, "Why
+    quantum and classical Cv merge at high T").
+
+    d = Cv_q - Cv_cl is probed at T0, 2 T0, 4 T0, ..., with
+    T0 = 10 max(E1 - E0, hbar omega_min): the pipeline's own "T -> inf"
+    checkpoint 10 (E1 - E0), guarded against a tunnelling doublet (tiny
+    E1 - E0) by the vibrational quantum at the minimum. T_merge is the
+    colder of the first two consecutive probes that both have
+    |d| + ERROR_MARGIN eps <= tol_xi and between which |d| falls at least
+    as fast as 1/T (or the hotter |d| is within its error): the
+    asymptotic regime, where |d| ~ T^-p with p >= 1 keeps falling.
+    Probing stops once past T_hot.
+
+    Returns
+    -------
+    dict with keys:
+        status : str
+            "not needed" (T_hot <= T0), "found", "not found" or "failed".
+        T_merge : float or None
+        T0 : float
+        probes : list of (T, d, eps)
+        slope : float or None
+            d ln|d| / d ln T between the two accepting probes (-inf if
+            the colder |d| was 0).
+        error : str or None   -- why probing failed
+    """
+    energies = spectra.get(1.0, 1e-12)        # any xi = 1 spectrum: only E1 - E0 is used
+    T0 = 10.0 * max(float(energies[1] - energies[0]), _hbar_omega_at_minimum(spectra))
+    out = {"status": "not needed", "T_merge": None, "T0": T0, "probes": [],
+           "slope": None, "error": None}
+    if T_hot <= T0:
+        return out
+    tol = settings["tol_xi"]
+    T = T0
+    try:
+        for _ in range(MAX_MERGE_PROBES):
+            out["probes"].append((T,) + _difference_at(potential_func, spectra, T, settings))
+            if len(out["probes"]) >= 2:
+                (Ta, da, ea), (Tb, db, eb) = out["probes"][-2:]
+                within = (np.all(np.isfinite([da, ea, db, eb]))
+                          and abs(da) + ERROR_MARGIN * ea <= tol
+                          and abs(db) + ERROR_MARGIN * eb <= tol)
+                if within:
+                    slope = (math.log(abs(db) / abs(da)) / math.log(Tb / Ta)
+                             if da != 0 and db != 0 else -math.inf)
+                    if abs(db) <= ERROR_MARGIN * eb or slope <= -1.0:
+                        out.update(status="found", T_merge=Ta, slope=slope)
+                        return out
+            if T > T_hot:
+                break
+            T *= 2.0
+    except Exception as exc:            # e.g. MemoryError: too many levels to probe
+        out.update(status="failed", error=f"{type(exc).__name__}: {exc}")
+        return out
+    out["status"] = "not found"
+    return out
 
 
 # =====================================================================
@@ -263,9 +336,11 @@ def scan_potential(potential_func, beta_arr, settings, spectra=None):
     The quantum and classical-limit Cv(T) of one potential at the given
     resolution, from the pipeline's own functions (module docstring).
 
-    Temperatures whose xi-scan would need more than
-    config.QUICK_SCAN_MAX_GRID DVR grid points (`hottest_feasible_T`) are
-    skipped: both curves are NaN there and "skipped" marks them.
+    If the window reaches above this potential's merge temperature
+    (`merge_temperature`), the temperatures above T_merge are not
+    computed: both curves are NaN there, "skipped" marks them, and a
+    note says why (quantum = classical within tol_xi, and how many levels
+    they would need).
 
     Returns
     -------
@@ -273,49 +348,41 @@ def scan_potential(potential_func, beta_arr, settings, spectra=None):
         cv_quantum, cv_classical, error_estimate : ndarray
             error_estimate is the xi-scan's distance-to-limit estimate
             (NaN where the classical limit did not converge).
-        skipped : ndarray of bool  -- temperatures too hot for the DVR
-        notes : list of str        -- console lines about skipped temperatures
+        skipped : ndarray of bool  -- temperatures above T_merge
+        merge : dict               -- the `merge_temperature` output
+        notes : list of str        -- console lines about the merge limit
         stop_reasons : dict  -- {stop reason: count} over temperatures
         energies : ndarray   -- the xi = 1 spectrum (that of V)
         solves, xi_top, seconds
-
-    Raises
-    ------
-    RuntimeError
-        If every temperature is too hot (the message gives the hottest
-        feasible one).
     """
     t0 = time.time()
     spectra = spectra if spectra is not None else _new_spectra(potential_func, settings)
-    T_arr = 1.0 / np.asarray(beta_arr, dtype=float)
-    T_ok = hottest_feasible_T(spectra, settings, float(T_arr.max()))
-    keep = T_arr <= T_ok * (1.0 + 1e-12)
-    notes = []
-    if not keep.all():
-        xi = settings["xi_mult"] ** settings["min_stable_xi"]
-        T_ref = float(T_arr.max() if keep.any() else T_arr.min())   # the coldest, if all are too hot
-        grid, levels = _estimated_grid(spectra, T_ref, xi)
-        why = (f"at T = {T_ref:.3g} the xi-scan would need ~{grid:,.0f} DVR grid points "
-               f"(~{levels:,.0f} levels, a {8 * grid**2 / 1e9:,.1f} GB matrix; "
-               f"QUICK_SCAN_MAX_GRID = {config.QUICK_SCAN_MAX_GRID:,}). "
-               f"The hottest feasible temperature is T ~ {T_ok:.3g}")
-        if not keep.any():
-            raise RuntimeError(f"every temperature is too hot for the DVR: {why}. Choose a colder "
-                               f"window (QUICK_SCAN_BETA_RANGE), or raise QUICK_SCAN_MAX_GRID "
-                               f"(a solve costs ~grid^3 time and 8 grid^2 bytes).")
-        notes.append(f"skipped {int((~keep).sum())} of {len(T_arr)} temperatures above "
-                     f"T ~ {T_ok:.3g}: {why}")
-
     solves_before = len(spectra.solves)
-    sweep = sweep_temperature_range(
-        potential_func, beta_arr[keep],
-        config.XI_START, settings["tol_xi"], settings["min_stable_xi"], settings["xi_mult"],
-        settings["max_xi_steps"], config.TOL_CV, config.MIN_STABLE_N,
-        mass=config.MASS, hbar=config.HBAR, thermal_coverage=settings["thermal_coverage"],
-        xi_max=config.XI_MAX, spectra=spectra, verbose=True,
-    )
-    # The xi = 1 rung, solved for the hottest temperature, is the spectrum of V.
-    energies = spectra.get(1.0, float(T_arr[keep].max()))
+    T_arr = 1.0 / np.asarray(beta_arr, dtype=float)
+    tol = settings["tol_xi"]
+    merge = merge_temperature(potential_func, spectra, settings, float(T_arr.max()))
+    keep = np.ones(len(T_arr), bool)
+    notes = []
+    if merge["status"] == "found":
+        keep = T_arr <= merge["T_merge"] * (1.0 + 1e-12)
+        if not keep.all():
+            (Ta, da, _), (Tb, db, _) = merge["probes"][-2:]
+            hot = T_arr[~keep]
+            trend = (f"falling as T^{merge['slope']:.1f}" if np.isfinite(merge["slope"])
+                     else "the hotter one within its error")
+            notes.append(
+                f"{int((~keep).sum())} of {len(T_arr)} temperatures (T {hot.min():.3g}-{hot.max():.3g}) "
+                f"lie above T_merge = {merge['T_merge']:.3g} and were not computed: there Cv_q = Cv_cl "
+                f"within {tol:g}, and computing them would need ~{estimated_levels(spectra, hot.min()):,.0f}"
+                f"-{estimated_levels(spectra, hot.max()):,.0f} levels. Shown at T = {Ta:.3g} and {Tb:.3g} "
+                f"(Cv_q - Cv_cl = {da:+.1e}, {db:+.1e}, {trend}; FINDINGS.md: why quantum and "
+                f"classical Cv merge at high T)")
+    elif merge["status"] == "not found":
+        notes.append(f"no merge limit up to T = {merge['probes'][-1][0]:.3g} (Cv_q and Cv_cl not yet "
+                     f"within {tol:g} there): the whole window is computed")
+    elif merge["status"] == "failed":
+        notes.append(f"the merge limit could not be established ({merge['error']}): the whole "
+                     f"window is computed")
 
     def _full(values):
         out = np.full(len(T_arr), np.nan)
@@ -323,14 +390,27 @@ def scan_potential(potential_func, beta_arr, settings, spectra=None):
         return out
 
     stop_reasons = {}
-    for xr in sweep["xi_results"]:
-        stop_reasons[xr["stop_reason"]] = stop_reasons.get(xr["stop_reason"], 0) + 1
+    if keep.any():
+        sweep = sweep_temperature_range(
+            potential_func, beta_arr[keep],
+            config.XI_START, settings["tol_xi"], settings["min_stable_xi"], settings["xi_mult"],
+            settings["max_xi_steps"], config.TOL_CV, config.MIN_STABLE_N,
+            mass=config.MASS, hbar=config.HBAR, thermal_coverage=settings["thermal_coverage"],
+            xi_max=config.XI_MAX, spectra=spectra, verbose=True,
+        )
+        for xr in sweep["xi_results"]:
+            stop_reasons[xr["stop_reason"]] = stop_reasons.get(xr["stop_reason"], 0) + 1
+        # The xi = 1 rung, solved for the hottest temperature, is the spectrum of V.
+        energies = spectra.get(1.0, float(T_arr[keep].max()))
+        cv_quantum = _full(compute_quantum_heat_capacity_curve(energies, beta_arr[keep], xi=1.0))
+        cv_classical, error_estimate = _full(sweep["cv_classical"]), _full(sweep["error_estimate"])
+    else:
+        energies = spectra.get(1.0, 1e-12)
+        cv_quantum = cv_classical = error_estimate = np.full(len(T_arr), np.nan)
     new_solves = spectra.solves[solves_before:]
     return {
-        "cv_quantum": _full(compute_quantum_heat_capacity_curve(energies, beta_arr[keep], xi=1.0)),
-        "cv_classical": _full(sweep["cv_classical"]),
-        "error_estimate": _full(sweep["error_estimate"]),
-        "skipped": ~keep, "notes": notes, "stop_reasons": stop_reasons,
+        "cv_quantum": cv_quantum, "cv_classical": cv_classical, "error_estimate": error_estimate,
+        "skipped": ~keep, "merge": merge, "notes": notes, "stop_reasons": stop_reasons,
         "energies": energies, "solves": len(new_solves),
         "xi_top": max([s["xi"] for s in new_solves], default=float("nan")),
         "seconds": time.time() - t0,
@@ -345,13 +425,15 @@ def compare_quantum_classical(T_arr, cv_quantum, cv_classical, error_estimate, s
     Classify every temperature by d = Cv_q - Cv_cl against the classical
     value's error estimate eps, with m = ERROR_MARGIN: above (d > m eps),
     below (d < -m eps) or unresolved (|d| <= m eps); see the module
-    docstring. Temperatures in `skipped` (too hot for the DVR, see
-    `scan_potential`) are left out of every class, including "missing".
+    docstring. Temperatures in `skipped` (above the potential's merge
+    temperature, see `scan_potential`) are left out of every class,
+    including "missing"; if every temperature is skipped, the verdict is
+    "merged".
 
     Returns
     -------
     dict with keys:
-        verdict : str  -- "ABOVE", "below" or "unresolved"
+        verdict : str  -- "ABOVE", "below", "unresolved" or "merged"
         d, eps : ndarray
         above, below, unresolved, missing : ndarray of bool
         hot_tail_only : bool
@@ -387,7 +469,11 @@ def compare_quantum_classical(T_arr, cv_quantum, cv_classical, error_estimate, s
         return f"T {t.min():.3g}-{t.max():.3g}"
 
     lines = []
-    if above.any():
+    if skipped.all():
+        verdict = "merged"
+        lines.append("the whole window lies above T_merge, where Cv_q = Cv_cl within this "
+                     "resolution's tolerance (note above): nothing to compute")
+    elif above.any():
         verdict = "ABOVE"
         i = int(np.nanargmax(np.where(above, d / eps, np.nan)))
         lines.append(f"quantum ABOVE classical at {int(above.sum())} temperatures ({_t_range(above)}); "
@@ -494,8 +580,9 @@ def run_quick_scan(mode=None, resolution=None, beta_range=None):
             diagnosis = _diagnose_variant_failure(potential_func)
             print(f"  ✗ {label_param} = {value:g} failed: {exc}")
             if isinstance(exc, MemoryError):
-                print("    the DVR matrix for these temperatures does not fit in memory: choose a "
-                      "colder window (QUICK_SCAN_BETA_RANGE) or a lower QUICK_SCAN_MAX_GRID")
+                print("    these temperatures need too many levels for a DVR (the matrix does not "
+                      "fit in memory); at such temperatures Cv_q = Cv_cl to O((hbar omega / k_B T)^2) "
+                      "(FINDINGS.md) -- choose a colder window (QUICK_SCAN_BETA_RANGE)")
             if diagnosis:
                 print(f"    diagnosis: {diagnosis}")
             failed.append({"params": params, "value": value, "error": str(exc), "diagnosis": diagnosis})
@@ -522,14 +609,15 @@ def run_quick_scan(mode=None, resolution=None, beta_range=None):
     if beta_range is not None:
         name += f"_beta{beta_range[0]:g}_to_{beta_range[1]:g}"
     figure_path = None
-    if results:
+    plotted = [r for r in results if not r["skipped"].all()]     # a "merged" potential has no curve
+    if plotted:
         figure_path = plot_coefficient_sweep(
-            T_arr, [r["value"] for r in results], [r["cv_quantum"] for r in results],
-            [r["cv_classical"] for r in results], label_param, config.SYSTEM_NAME, formula_text,
+            T_arr, [r["value"] for r in plotted], [r["cv_quantum"] for r in plotted],
+            [r["cv_classical"] for r in plotted], label_param, config.SYSTEM_NAME, formula_text,
             T_units_label=config.T_UNITS_LABEL,
-            variant_deltas=[float(r["energies"][1] - r["energies"][0]) for r in results],
+            variant_deltas=[float(r["energies"][1] - r["energies"][0]) for r in plotted],
             symmetric_value=config.SCAN_SYMMETRIC_VALUE if label_param == config.SCAN_PARAM else None,
-            classical_incomplete={r["value"] for r in results
+            classical_incomplete={r["value"] for r in plotted
                                   if np.isnan(r["cv_classical"][~r["skipped"]]).any()},
             title=title, category="quick_scan", name=name,
         )
@@ -538,7 +626,7 @@ def run_quick_scan(mode=None, resolution=None, beta_range=None):
     print(f"\n{rule}\n  Quick scan summary (resolution {resolution}, {seconds:.0f}s total; "
           f"resolved = |Cv_q - Cv_cl| > {ERROR_MARGIN:g} x the classical error estimate)")
     print(f"  {label_param:>8}  {'verdict':<10}  {'max(Cv_q - Cv_cl)':>17}  {'error est.':>10}  {'at T':>7}  "
-          f"{'unresolved':>10}  {'cl. missing':>11}  {'too hot':>7}")
+          f"{'unresolved':>10}  {'cl. missing':>11}  {'T_merge':>8}  {'above it':>8}")
     for r in results:
         v = r["verdict"]
         d = np.where(np.isfinite(v["eps"]), v["d"], np.nan)
@@ -549,8 +637,12 @@ def run_quick_scan(mode=None, resolution=None, beta_range=None):
             d_text = e_text = t_text = "-"
         unres = int(v["unresolved"].sum())
         unres_text = f"{unres} (hot tail)" if v["hot_tail_only"] else str(unres)
+        m = r["merge"]
+        merge_text = {"found": f"{m['T_merge']:.3g}" if m["T_merge"] else "-",
+                      "not needed": "-", "not found": "none", "failed": "failed"}[m["status"]]
         print(f"  {r['value']:>8g}  {v['verdict']:<10}  {d_text:>17}  {e_text:>10}  {t_text:>7}  "
-              f"{unres_text:>10}  {int(v['missing'].sum()):>11}  {int(r['skipped'].sum()):>7}")
+              f"{unres_text:>10}  {int(v['missing'].sum()):>11}  {merge_text:>8}  "
+              f"{int(r['skipped'].sum()):>8}")
     for f in failed:
         reason = f["error"].splitlines()[0] if f["error"] else "error"
         print(f"  {f['value']:>8g}  failed: {reason if len(reason) <= 80 else reason[:77] + '...'}")
