@@ -192,3 +192,35 @@ def reference_label(span_factor, dx_factor):
 
 
 ref_label = reference_label(REFERENCE_SPAN_FACTOR, REFERENCE_DX_FACTOR)
+
+# --- Quick initial scan (Quick_Scan.py) ---
+# A fast first look before committing the full pipeline to a potential:
+# ONLY the quantum and classical-limit Cv(T) curves, with the same xi
+# method at coarser settings (see Quick_Scan.py's docstring).
+# QUICK_SCAN_MODE: "single" = the potential above; "sweep" = SCAN_PARAM
+#   swept as in Section 7 (SCAN_STEP, SCAN_COUNT, SCAN_SYMMETRIC_VALUE),
+#   each variant against its own classical limit.
+# QUICK_SCAN_RESOLUTION: a key of QUICK_SCAN_PRESETS. Start at 1 and raise
+#   it when the console verdict says the result is not resolved.
+# QUICK_SCAN_BETA_RANGE: (beta_min, beta_max) to zoom into one window
+#   (cheaper, especially without the cold end); None = the pipeline's
+#   BETA_MIN / BETA_MAX.
+# Preset fields: n_beta = temperatures; tol_xi = tolerance on the
+#   classical value (same meaning as TOL_XI); xi_mult / min_stable_xi =
+#   the xi ladder and plateau; thermal_coverage = levels kept up to
+#   E_0 + thermal_coverage * k_B T (as HOT_STATE_SAFETY); dvr_tolerance =
+#   tolerance of every DVR solve's 3-pass check. Every preset uses the
+#   pipeline's ladder start XI_START and cap XI_MAX. Resolution 3 is the
+#   full pipeline's own settings, without its diagnostics and reference
+#   checks.
+QUICK_SCAN_MODE       = "sweep"
+QUICK_SCAN_RESOLUTION = 1
+QUICK_SCAN_BETA_RANGE = None
+QUICK_SCAN_PRESETS = {
+    1: dict(n_beta=60,     tol_xi=1e-2,   xi_mult=1.5,     min_stable_xi=2,
+            thermal_coverage=12.0, dvr_tolerance=1e-3),
+    2: dict(n_beta=150,    tol_xi=5e-3,   xi_mult=1.35,    min_stable_xi=2,
+            thermal_coverage=15.0, dvr_tolerance=1e-4),
+    3: dict(n_beta=N_BETA, tol_xi=TOL_XI, xi_mult=XI_MULT, min_stable_xi=MIN_STABLE_XI,
+            thermal_coverage=HOT_STATE_SAFETY, dvr_tolerance=1e-5),
+}

@@ -1,0 +1,42 @@
+Quick-scan validation, 2026-10-09 14:10: potential {'a': 0.25, 'b': -0.5, 'c': -0.5, 'd': 0.0}, sweep of b (step 0.2, count 2, symmetric value 0.0)
+Full-resolution reference (Sections 1 & 4 + 7, config.py settings, 1000 temperatures): ~44 min; max(Cv_q - Cv_cl) per b: -0.9: -0.0021, -0.7: -0.0013, -0.5: -0.0010, -0.3: -0.0010, -0.1: -0.0009, 0: -0.0009
+
+## sweep, resolution 1: {'n_beta': 60, 'tol_xi': 0.01, 'xi_mult': 1.5, 'min_stable_xi': 2, 'thermal_coverage': 12.0, 'dvr_tolerance': 0.001}
+  299s total; 60 temperatures, T = 0.02 .. 13.3
+
+  | b | time | DVR solves (xi max) | quantum: max abs diff to full pipeline | classical: max abs error vs exact | max error / estimate | classical: max abs diff to full-resolution xi-scan | verdict | wrong resolved verdicts |
+  |---|---|---|---|---|---|---|---|---|
+  | -0.9 | 57 s | 18 (985.3) | 1.5e-07 | 4.5e-03 | 1.03 | 3.7e-03 | below | 0 |
+  | -0.7 | 55 s | 17 (656.8) | 1.0e-07 | 4.5e-03 | 1.08 | 3.9e-03 | below | 0 |
+  | -0.5 | 53 s | 17 (656.8) | 1.0e-07 | 4.7e-03 | 1.04 | 4.1e-03 | below | 0 |
+  | -0.3 | 53 s | 16 (437.9) | 1.2e-07 | 5.0e-03 | 1.10 | 4.3e-03 | below | 0 |
+  | -0.1 | 46 s | 16 (437.9) | 1.0e-07 | 5.1e-03 | 1.09 | 4.4e-03 | below | 0 |
+  | 0 | 32 s | 16 (437.9) | 1.0e-07 | 5.2e-03 | 1.08 | 4.5e-03 | below | 0 |
+
+  worst: quantum 1.5e-07; classical 5.2e-03 (at most 1.10 x its own estimate); wrong resolved verdicts: 0
+  figure: figures\1_d_asymmetric_double_well\a-0p25_b-m0p5_c-m0p5_d-0\quick_scan\quick_sweep_res1.png
+
+## sweep, resolution 2: {'n_beta': 150, 'tol_xi': 0.005, 'xi_mult': 1.35, 'min_stable_xi': 2, 'thermal_coverage': 15.0, 'dvr_tolerance': 0.0001}
+  637s total; 150 temperatures, T = 0.02 .. 13.3
+
+  | b | time | DVR solves (xi max) | quantum: max abs diff to full pipeline | classical: max abs error vs exact | max error / estimate | classical: max abs diff to full-resolution xi-scan | verdict | wrong resolved verdicts |
+  |---|---|---|---|---|---|---|---|---|
+  | -0.9 | 124 s | 24 (994.7) | 1.8e-09 | 2.8e-03 | 1.01 | 2.2e-03 | below | 0 |
+  | -0.7 | 113 s | 24 (994.7) | 1.6e-09 | 2.8e-03 | 1.02 | 2.2e-03 | below | 0 |
+  | -0.5 | 106 s | 23 (736.8) | 1.6e-09 | 2.8e-03 | 1.03 | 2.2e-03 | below | 0 |
+  | -0.3 | 91 s | 22 (545.8) | 1.8e-09 | 2.9e-03 | 1.04 | 2.3e-03 | below | 0 |
+  | -0.1 | 106 s | 22 (545.8) | 1.6e-09 | 3.0e-03 | 1.04 | 2.4e-03 | below | 0 |
+  | 0 | 93 s | 21 (404.3) | 1.6e-09 | 2.9e-03 | 1.04 | 2.3e-03 | below | 0 |
+
+  worst: quantum 1.8e-09; classical 3.0e-03 (at most 1.04 x its own estimate); wrong resolved verdicts: 0
+  figure: figures\1_d_asymmetric_double_well\a-0p25_b-m0p5_c-m0p5_d-0\quick_scan\quick_sweep_res2.png
+
+## single, resolution 3: {'n_beta': 1000, 'tol_xi': 0.002, 'xi_mult': 1.25, 'min_stable_xi': 3, 'thermal_coverage': 20.0, 'dvr_tolerance': 1e-05}
+  595s total; 1000 temperatures, T = 0.02 .. 13.3
+
+  | b | time | DVR solves (xi max) | quantum: max abs diff to full pipeline | classical: max abs error vs exact | max error / estimate | classical: max abs diff to full-resolution xi-scan | verdict | wrong resolved verdicts |
+  |---|---|---|---|---|---|---|---|---|
+  | -0.5 | 591 s | 33 (1262) | 2.2e-12 | 8.4e-04 | 1.01 | 3.8e-12 | below | 0 |
+
+  worst: quantum 2.2e-12; classical 8.4e-04 (at most 1.01 x its own estimate); wrong resolved verdicts: 0
+  figure: figures\1_d_asymmetric_double_well\a-0p25_b-m0p5_c-m0p5_d-0\quick_scan\quick_single_res3.png

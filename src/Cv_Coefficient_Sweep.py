@@ -443,7 +443,8 @@ def plot_coefficient_sweep(T_arr, variant_values, variant_curves, variant_classi
                             scan_param, system_name, formula_text=None,
                             marginal_values=None, T_units_label=r"$k_B T \,/\, E_0$",
                             variant_deltas=None, symmetric_value=None,
-                            classical_incomplete=None):
+                            classical_incomplete=None, title=None,
+                            category="coefficient_sweep", name="cv_coefficient_sweep"):
     """
     Plot, for every coefficient variant, its quantum Cv(T) (solid) and
     its OWN classical-limit Cv(T) (dashed) in the same color, so each
@@ -497,15 +498,23 @@ def plot_coefficient_sweep(T_arr, variant_values, variant_curves, variant_classi
     classical_incomplete : set of float or None, optional
         Values whose classical-limit xi-scan failed at some temperatures
         (gaps in the dashed curve) -- flagged with a dagger in the legend.
+    title : str or None, optional
+        First title line (None = "<system> -- Quantum vs classical Cv(T)
+        across <scan_param>"). Quick_Scan.py passes its own.
+    category, name : str, optional
+        Where the figure is saved (figures/output_paths.save_figure);
+        Quick_Scan.py saves to its own quick_scan/ folder so it never
+        overwrites this section's figure.
 
     Returns
     -------
-    None (saves the figure; see figures/output_paths.py).
+    str
+        Path of the saved figure (see figures/output_paths.py).
     """
     marginal_values = marginal_values or set()
     classical_incomplete = classical_incomplete or set()
     fig, ax = plt.subplots(figsize=(12, 6.2))
-    title_lines = [f"{system_name} — Quantum vs classical $C_v(T)$ across {scan_param}"]
+    title_lines = [title or f"{system_name} — Quantum vs classical $C_v(T)$ across {scan_param}"]
     if formula_text:
         title_lines.append(formula_text)
     title_lines.append("(solid: quantum;  dashed: classical limit of the same potential)")
@@ -545,7 +554,7 @@ def plot_coefficient_sweep(T_arr, variant_values, variant_curves, variant_classi
     # itself; push the axes down afterward so the (up to 3-line) title
     # never overlaps the plotted curves.
     fig.subplots_adjust(top=0.99 - 0.06 * len(title_lines))
-    save_figure(fig, "coefficient_sweep", "cv_coefficient_sweep")
+    return save_figure(fig, category, name)
 
 
 # =====================================================================
