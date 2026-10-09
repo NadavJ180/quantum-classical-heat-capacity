@@ -6,7 +6,8 @@ Branch `correct-classical`. This document is written to be followed step by step
 - section 3 walks through every changed file;
 - section 4 lists what you will see differently;
 - section 5 gives the evidence it works;
-- section 6 lists what was deliberately left untouched.
+- section 6 lists what was deliberately left untouched;
+- sections 7 and 8 are the follow-up rounds: per-variant classical curves and the documentation (7); Section 6's lighter classical reference and the quick initial scan (8).
 
 The physics of option A (the exact classical integral) is explained separately in [OPTION_A_physics.md](OPTION_A_physics.md); the original diagnosis is in [AUDIT.md](AUDIT.md).
 
@@ -167,7 +168,7 @@ Because the reported value sits below the limit by almost exactly its estimate, 
 
 ## 6. Open items
 
-- **Section 6 cost.** Measured, not yet applied (section 7c). A lighter classical-reference factor gives the same verification in a fraction of the time.
+- **Section 6 cost.** Measured in section 7c, applied in section 8a.
 - **`docs/summaries/IEEE_Summary.tex`** lines 77, 182 and 198 still describe the old method. It is synced with Overleaf, and you write it yourself.
 - **`verification/classical_limit/`** (the paused toy-model check) was written against the old API and has not been updated.
 - **Figures** under `figures/` were not regenerated. The runs wrote their figures to a scratch folder, and copies are kept in `figures/corrected_run/` here.
@@ -218,4 +219,83 @@ Because the reported value sits below the limit by almost exactly its estimate, 
 - **The figures would not change.** The curves in Section 6's figure are indistinguishable, and its error panel would show the same ~1e-12 profile.
 - **A lighter reference is still a real test.** It still changes both the span and the spacing of every solve. Because DVR errors fall exponentially with resolution and span, an under-resolved base solve would still show up as a visible difference.
 
-**Suggested change (not applied).** Add a separate pair `CLASSICAL_REFERENCE_SPAN_FACTOR`/`CLASSICAL_REFERENCE_DX_FACTOR` = 1.5/1.5, a 3.7× speed-up with comfortable margin, or 1.25/1.25 for 6.4×. Keep Section 2's 2/2 for the spectrum reference, which costs under a minute.
+**Suggested change.** Add a separate pair `CLASSICAL_REFERENCE_SPAN_FACTOR`/`CLASSICAL_REFERENCE_DX_FACTOR` = 1.5/1.5, a 3.7× speed-up with comfortable margin, or 1.25/1.25 for 6.4×. Keep Section 2's 2/2 for the spectrum reference, which costs under a minute. *Applied with 1.5/1.5 and a precise 2/2 option in section 8a.*
+
+## 8. Follow-up: Section 6's lighter classical reference, and a quick initial scan
+
+### 8a. Section 6's classical reference on 1.5 / 1.5, with a precise option
+
+**`src/config.py`**
+- New `CLASSICAL_REFERENCE_SPAN_FACTOR` = 1.5 and `CLASSICAL_REFERENCE_DX_FACTOR` = 1.5: the grid of every ξ²V solve in Section 6's classical reference. The comment records the section 7c measurement.
+- New `CLASSICAL_REFERENCE_PRECISE` = `False`. `True` gives the classical reference Section 2's own factors (2 / 2): the stricter, slower option.
+- New helper `reference_label(span_factor, dx_factor)`. `ref_label` is now built with it, with the same text as before.
+
+**`src/Quantum_HO_Master.py`** (Section 6 only)
+- Chooses the classical reference factors: `CLASSICAL_REFERENCE_*`, or Section 2's (`reference_result["span_factor"]`, `["dx_factor"]`, which respects interactive mode) when `CLASSICAL_REFERENCE_PRECISE` is on.
+- Passes them, and a label naming them, to `run_cv_numerical_benchmark`.
+- Header and Section 6 comments updated.
+
+**`src/Cv_Numerical_Benchmark.py`**
+- `run_cv_numerical_benchmark` and `print_cv_benchmark_summary` take an optional `classical_reference_label`. Its default is the quantum reference's label, which reproduces the old behavior.
+- The classical figure's title uses that label, and the console names both reference grids.
+- Both Section 6 figures reserve room for their two-line title (`tight_layout(rect=...)`). Before this, the title overlapped the legend and the top of the plot; this is visible in `figures/corrected_run/` here. Layout only; no number changes.
+- Docstrings updated.
+
+The quantum benchmark is unchanged: it still uses Section 2's 2 / 2 spectrum, which costs under a minute.
+
+**Evidence.**
+- **Same verification at a quarter of the cost:** the measurement in 7c, on the full 1000-temperature grid.
+- **The wiring runs end to end.** `Quantum_HO_Master.py` was run unmodified with small settings (`NUM_STATES` 150, 30 temperatures, `BETA_MAX` 5, a three-variant Section 7; figures to a scratch folder):
+
+  | Section 6 classical reference | outcome | Section 6 time | classical: max rel. difference to the base |
+  |---|---|---|---|
+  | default (1.5 / 1.5) | all seven sections, exit 0 | 315 s | 1.5e-13 |
+  | `CLASSICAL_REFERENCE_PRECISE = True` (2 / 2) | stopped after Section 6 | 825 s | 2.0e-13 |
+
+  - In both runs the console and the figure name the quantum reference (span×2, dx÷2) and the classical reference separately.
+  - The quantum benchmark agreed to 3.7e-12 in both.
+  - The title-layout fix came after these runs. It was checked by rendering both figures.
+
+### 8b. Quick initial scan (`src/Quick_Scan.py`)
+
+**What it is.** A first look at a candidate potential before a full run is committed to it. It draws only the quantum $C_v(T)$ (solid) and the classical limit (dashed), for one potential (`"single"`) or for the Section 7 sweep (`"sweep"`, each variant against its own classical limit), and prints a verdict per potential. Usage is in the README ("Quick Initial Scan"); the reasoning is in FINDINGS ("The Quick Scan").
+
+**What it reuses (no new algorithm).**
+- Classical limit: `Classical_Limit_Numerical.sweep_temperature_range` with a `ScaledSpectra` cache built at the chosen resolution (`thermal_coverage`, `dvr_tolerance`).
+- Quantum $C_v$: `Quantum_Classical_Combined.compute_quantum_heat_capacity_curve`, on the ξ = 1 rung's spectrum (that of V itself, solved at the hottest temperature), so it costs no extra solve.
+- Temperature grid: `Cv_AutoTune.resolve_beta_min`, exactly as the pipeline.
+- Variants, formula and figure: `Cv_Coefficient_Sweep.generate_variant_params`, `format_potential_formula` and `plot_coefficient_sweep`. A failed variant is diagnosed with `_diagnose_variant_failure`, as in Section 7.
+- Figure paths: `figures/output_paths.py`, category `quick_scan`.
+
+**What is new in it.**
+- `quick_settings` reads a preset and sizes the ladder so that it reaches `XI_MAX`.
+- `compare_quantum_classical` classifies each temperature against the classical value's own error estimate ε: above (d > 2ε), below (d < −2ε) or unresolved. It also detects when the only unresolved band is the hot tail.
+  - The margin `ERROR_MARGIN` = 2 was set after a first validation pass at margin 1. That pass found the true error up to 1.10ε, and found the coarse value always below the limit, which shifts d upward by about ε. With margin 1, a false "above" was therefore possible where the curves merge. That pass's run was stopped and repeated with the final code.
+- `run_quick_scan` orchestrates; a small command-line interface (`--mode`, `--resolution`, `--beta-range`) overrides `config.py`.
+
+**Other changed files.**
+- **`src/config.py`:** `QUICK_SCAN_MODE`, `QUICK_SCAN_RESOLUTION`, `QUICK_SCAN_BETA_RANGE` and `QUICK_SCAN_PRESETS` (resolutions 1, 2 and 3; 3 is the full pipeline's settings).
+- **`src/Cv_Coefficient_Sweep.py`:** `plot_coefficient_sweep` takes optional `title`, `category` and `name`, and returns the figure path. Section 7's call passes none of them, so its figure is unchanged and saved where it always was.
+
+**Validation** ([`../quick_scan/validate_quick_scan.py`](../quick_scan/validate_quick_scan.py), [`../quick_scan/QUICK_SCAN_VALIDATION.txt`](../quick_scan/QUICK_SCAN_VALIDATION.txt)).
+
+Compared with the full pipeline (the stored full-resolution Section 7 curves, [`../quick_scan/full_resolution_section7.npz`](../quick_scan/full_resolution_section7.npz), and each variant's 500-level quantum curve) and with the exact classical $C_v$ (`exact_classical_R` from this folder's audit script, used only as a check):
+
+| resolution | run | time | quantum vs full pipeline | classical error vs exact | true error ÷ estimate | classical vs full-resolution ξ-scan | wrong resolved verdicts |
+|---|---|---|---|---|---|---|---|
+| 1 | six-variant sweep, 60 T | 5.0 min | ≤ 1.5e-7 | ≤ 5.2e-3 | 1.03–1.10 | ≤ 4.5e-3 | 0 |
+| 2 | six-variant sweep, 150 T | 10.6 min | ≤ 1.8e-9 | ≤ 3.0e-3 | 1.01–1.04 | ≤ 2.4e-3 | 0 |
+| 3 | b = −0.5, 1000 T | 9.9 min | 2.2e-12 | 8.4e-4 | 1.01 | 3.8e-12 | 0 |
+
+- **Same conclusion as the full run.** Every variant is "below" at resolutions 1 and 2, the same as the ~44-minute full-resolution Section 7 run. The quick figures ([`../quick_scan/figures/`](../quick_scan/figures/)) show the same peaks.
+- **Resolution 3 is the full pipeline.** Its classical curve is identical to the full run's to 4e-12.
+- **Cheaper cold end.** The coarse tolerance reaches its plateau at a lower ξ: b = −0.9 needs ξ ≈ 985 at resolution 1, against 1,972 at full resolution.
+
+**Open item: the WKB sizing overhead (not applied, needs your approval).** Profiling resolution 1 on the base double well (17 solves, ~48 s) showed that about half of the time goes not to diagonalization but to `ScaledSpectra`'s WKB sizing. `_wkb_energy_for_count` bisects 60 times, and every step re-samples V on a 40,001-point window grown from scratch (`_allowed_region`). Sampling V once per cache, or bisecting to a relative 1e-6 instead of 60 halvings, would not change the method or its accuracy (the sizing only picks how many levels to solve for, with margins on top), and would make the quick scan roughly twice as fast (the full pipeline ~1 min faster). It is a change to the classical-limit engine, so it is left for your decision.
+
+### 8c. Documentation
+
+- **`README.md`:** the Section 6 description and runtimes (default 1.5 / 1.5, the precise option, full-run time); a new "Quick Initial Scan" section (what it is, what it reuses, the resolution presets with measured times, the verdict, usage); the repository tree, the `quick_scan` figure category, and a quick-scan step in "Running on a New Potential".
+- **`FINDINGS.md`:** a physics subsection "The Quick Scan" (why a looser tolerance is cheap, why the hot tail stays unresolved); the quick-scan validation results; the new parameters; the Section 6 factor paragraph (now the default, with when to use the precise option); the quick-scan figure in the plot table; troubleshooting entries.
+- **`HISTORY.md`:** the October 2026 chapter continues with the Section 6 change and the motivation, design, validation and profiling of the quick scan; four new version-table rows.
+- **Not touched:** the `.tex` files.

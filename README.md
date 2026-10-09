@@ -5,6 +5,7 @@ A modular, system-agnostic numerical pipeline for the heat capacity $C_v(T)$ of 
 - **Quantum $C_v(T)$:** computed from an energy spectrum obtained with the Discrete Variable Representation (DVR).
 - **Classical limit:** found with the ξ-scaling of Gelbwaser-Klimovsky et al.: scale the potential and the temperature together, V → ξ²V and T → ξ²T, re-solve the Schrödinger equation for ξ²V at every ξ, and follow $C_v$ to its plateau. This is ħ → ħ/ξ at fixed V and T.
 - **Self-validating:** every result is checked against an independently generated, higher-resolution numerical reference rather than a closed-form formula, so the same checks work for potentials with no analytic solution.
+- **Quick initial scan:** [`src/Quick_Scan.py`](src/Quick_Scan.py) draws only the quantum and classical $C_v(T)$ of one potential, or of a coefficient sweep, with the same ξ method at a lower resolution. It takes about a minute per potential, so a candidate can be checked before a full run (about an hour) is committed to it.
 
 **Status:**
 - The harmonic oscillator (HO) is validated against its exact solution.
@@ -14,7 +15,8 @@ A modular, system-agnostic numerical pipeline for the heat capacity $C_v(T)$ of 
 Other documents:
 - [`FINDINGS.md`](FINDINGS.md): the physics behind each step, how to read the diagnostic plots, and current results.
 - [`HISTORY.md`](HISTORY.md): how the pipeline got here, including the classical-limit correction.
-- [`audit/classical_limit/`](audit/classical_limit/): the audit, the change log and the verification scripts for that correction.
+- [`audit/classical_limit/`](audit/classical_limit/): the audit, the change log and the verification scripts for that correction. [`CHANGES.md`](audit/classical_limit/CHANGES.md) there is the file-by-file change log of the whole branch, including the Section 6 grid and the quick scan.
+- [`audit/quick_scan/`](audit/quick_scan/): the quick scan's validation against the full pipeline and the exact classical $C_v$.
 - [`docs/summaries/IEEE_Summary.tex`](docs/summaries/IEEE_Summary.tex) (the project report) and [`docs/summaries/Meetings_Summary.tex`](docs/summaries/Meetings_Summary.tex) (meeting notes and derivations). The report still describes the classical-limit method as it was before the correction.
 
 ---
@@ -31,6 +33,8 @@ src/
 ├── Cv_Numerical_Benchmark.py     Cv comparison: base grid vs. numerical reference (quantum + classical)
 ├── Cv_AutoTune.py                BETA_MIN auto-fill + escalation diagnostics (see "Auto-Tuning")
 ├── Cv_Coefficient_Sweep.py       Quantum and own classical Cv(T) across a swept coefficient (see "Coefficient Sweep")
+├── Quick_Scan.py                 Quick initial scan: quantum + classical Cv(T) only, low resolution,
+│                                 one potential or a sweep (see "Quick Initial Scan")
 ├── DVR/
 │   ├── DVR_Algorithm.py          Core DVR solver and automatic grid configuration
 │   ├── DVR_Reference_Generator.py  Numerical reference grid generator
@@ -47,6 +51,7 @@ src/
 
 audit/classical_limit/   Audit of the pre-correction classical limit, the correction's change log,
                          the physics of the exact classical heat capacity, and verification scripts
+audit/quick_scan/        Validation of the quick scan against the full pipeline and the exact classical Cv
 figures/                 Generated plots (see "Figure Output"). HO/ and SymmetricDoubleWell/ are
                          hand-saved figures referenced directly by IEEE_Summary.tex; runs no longer
                          write into them.
@@ -66,9 +71,10 @@ docs/summaries/          IEEE_Summary.tex (report), Meetings_Summary.tex (meetin
 3. **Energy-level accuracy.** Base vs. reference eigenvalues, absolute and relative error.
 5. **DVR limit analysis.** The solver's own resolution (Δx) and level-count (n) breakdown points, measured against the reference.
 6. **Cv numerical benchmark.**
-   - Quantum $C_v$ from the reference spectrum.
-   - Classical limit re-computed with every ξ²V solve on a grid widened and refined by the same reference factors.
-   - Both compared with Section 4.
+   - Quantum $C_v$ from Section 2's reference spectrum.
+   - Classical limit re-computed with every ξ²V solve on a grid widened and refined by `CLASSICAL_REFERENCE_SPAN_FACTOR` / `CLASSICAL_REFERENCE_DX_FACTOR` (default 1.5 / 1.5).
+   - **More precise option:** `CLASSICAL_REFERENCE_PRECISE = True` uses Section 2's own factors (`REFERENCE_SPAN_FACTOR` / `REFERENCE_DX_FACTOR`, 2 / 2) instead. It is a stricter grid test, at about 3.7× the cost. On the double well both agree with the base curve to ~5e-12 (FINDINGS, "Key Parameters").
+   - Both curves are compared with Section 4. Each figure states the grid of its own reference.
 7. **Coefficient sweep.** Several variants of the base potential that differ in one coefficient. Each variant's quantum $C_v(T)$ is plotted against its own classical limit (see "Coefficient Sweep").
 
 Only the potential block of `config.py` needs editing to run on a new potential.
@@ -78,8 +84,11 @@ Only the potential block of `config.py` needs editing to run on a new potential.
 | part | time |
 |---|---|
 | Sections 1 & 4 | ~7 min, of which ~6.5 min is the classical limit (~33 DVR solves of ξ²V) |
-| Section 6 | ~36 min (the reference classical sweep on 4×-point grids) |
-| Section 7 | ~6–8 min per non-base variant (one classical sweep each); ~44 min for the default six-variant sweep |
+| Sections 2, 3, 5 | ~2.5 min |
+| Section 6 | ~10 min with the default 1.5 / 1.5 classical reference; ~36 min with `CLASSICAL_REFERENCE_PRECISE = True` (2 / 2) |
+| Section 7 | ~6–8 min per non-base variant (one classical sweep each); ~37 min for the default six-variant sweep |
+| **Full run** | **~1 h** (~1.4 h with the precise Section 6 reference) |
+| `Quick_Scan.py` (separate) | resolution 1: ~1 min per potential (5 min for the six-variant sweep); resolution 2: ~2 min per potential (11 min); resolution 3 (the full settings): ~7–10 min per potential |
 
 ## Classical Limit
 
@@ -132,6 +141,55 @@ Behaviors to know:
 - **Failed variants:** a variant whose potential is not confining (its DVR solve fails) is skipped with a diagnosis instead of aborting the sweep. A variant whose classical scan fails at some temperatures is kept, with gaps in its dashed curve and a † in the legend.
 - **Per-variant NUM_STATES:** each variant's `NUM_STATES` is checked against the same hot-end coverage criterion as the base run and escalated per variant if needed. A variant that still falls short is flagged with `*` (see `Cv_Coefficient_Sweep.py`'s docstring).
 
+## Quick Initial Scan
+
+`src/Quick_Scan.py` gives a first look at a candidate potential before a full run is committed to it. It produces **one figure**: the quantum $C_v(T)$ (solid) and the classical-limit $C_v(T)$ (dashed, same color), either for the potential in `config.py` (`"single"`) or for every variant of the Section 7 sweep (`"sweep"`), each against its own classical limit. It also prints a verdict per potential. There are no convergence figures, reference grids, auto-tuning or potential panels.
+
+**The same method, at a lower resolution.** Nothing in it is a new algorithm. It calls the pipeline's own functions:
+- the classical limit is the ξ-scan with ξ²V re-solved at every ξ (`sweep_temperature_range`);
+- the quantum $C_v$ is `compute_quantum_heat_capacity_curve`;
+- the variants and the figure come from Section 7 (`generate_variant_params`, `plot_coefficient_sweep`).
+
+Only the settings are coarser. The quantum spectrum costs nothing extra: the ξ ladder starts at ξ = 1, and that rung, solved at the hottest temperature, is the spectrum of V itself.
+
+**Resolutions** (`QUICK_SCAN_PRESETS` in `config.py`). Measured on the double well:
+
+| resolution | temperatures | `tol_xi` | ξ ladder | plateau | levels kept up to | DVR tolerance | time per potential | six-variant sweep | classical error (measured) |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 60 | 1e-2 | ×1.5 | 2 steps | $E_0+12\,k_BT$ | 1e-3 | ~50 s | 5 min | ≤ 5.2e-3 |
+| 2 | 150 | 5e-3 | ×1.35 | 2 steps | $E_0+15\,k_BT$ | 1e-4 | ~1.8 min | 11 min | ≤ 3.0e-3 |
+| 3 | 1000 | 2e-3 | ×1.25 | 3 steps | $E_0+20\,k_BT$ | 1e-5 | ~7–10 min | ≈ Sections 4 + 7 (~44 min) | ≤ 8.4e-4 |
+
+At every resolution, the quantum curve matched the full pipeline's to ≤ 1.5e-7, and the true classical error was 1.01–1.10 times the scan's own estimate. The details are in [`audit/quick_scan/QUICK_SCAN_VALIDATION.txt`](audit/quick_scan/QUICK_SCAN_VALIDATION.txt).
+
+Resolution 3 uses the full pipeline's own settings. A higher resolution costs more mainly at the cold end, which needs the largest ξ.
+
+**The verdict.** Every classical value carries the ξ-scan's own estimate ε of its distance to the ξ → ∞ limit. At each temperature, d = $C_v^{q}-C_v^{cl}$ is classified:
+- **above** if d > 2ε;
+- **below** if d < −2ε;
+- **unresolved** if |d| ≤ 2ε.
+
+The factor 2 (`ERROR_MARGIN` in `Quick_Scan.py`) is a safety margin. The estimate tracks the true error to within ~10%, but a coarse classical value sits *below* the limit by about ε, which shifts d upward by the same amount. With a margin of 1, a temperature where the curves have merged could be called "above".
+
+The console prints one line per potential and a summary table. At high T the quantum $C_v$ approaches the classical one, so a band of unresolved temperatures at the hot end is expected at any resolution, and the verdict says when that band is the only unresolved region.
+
+**Usage:**
+1. Set the potential in `config.py` (and `SCAN_PARAM`/`SCAN_STEP`/`SCAN_COUNT`/`SCAN_SYMMETRIC_VALUE` for a sweep).
+2. Set `QUICK_SCAN_MODE` (`"single"` or `"sweep"`) and start at `QUICK_SCAN_RESOLUTION = 1`. Then, from `src/`, run:
+
+   ```bash
+   python Quick_Scan.py
+   ```
+
+   Command-line flags override `config.py`, for example `python Quick_Scan.py --mode single --resolution 2 --beta-range 0.5 5`.
+3. Read the verdict:
+   - **below** everywhere: no quantum excess at this resolution. The printed closest approach tells you by how much.
+   - **ABOVE**: a candidate. Confirm it at a higher resolution, then with the full pipeline.
+   - **unresolved** outside the hot tail, or gaps in a classical curve (†): raise the resolution, or zoom into that window with `QUICK_SCAN_BETA_RANGE` (`--beta-range`) and raise it there. A window that leaves out the cold end is much cheaper.
+4. Run the full pipeline (`Quantum_HO_Master.py`) on a candidate that holds up.
+
+The figure is saved to `figures/<system>/<params>/quick_scan/quick_<mode>_res<N>.png`, with `_beta<min>_to_<max>` appended for a zoom window, so a quick scan never overwrites the pipeline's figures.
+
 ## Figure Output
 
 Every figure the pipeline saves is written to
@@ -147,7 +205,8 @@ figures/<system>/<params>/<category>/<name>.png
   - `convergence` (ξ- and n-convergence diagnostics),
   - `cv` (the Cv summary and all Cv benchmarks),
   - `dvr_limits`,
-  - `coefficient_sweep` (Section 7).
+  - `coefficient_sweep` (Section 7),
+  - `quick_scan` (`Quick_Scan.py`).
 
 All path components use only `[A-Za-z0-9_-]` (`-` → `m`, `.` → `p`), so the tree can be used directly from LaTeX. Paths are set by [`src/figures/output_paths.py`](src/figures/output_paths.py): a driver calls `set_context(SYSTEM_NAME, POTENTIAL_PARAMS)` once, and every plotting function calls `save_figure(fig, category, name)`, which saves and closes the figure (there is no `plt.show()` anywhere). The workflow diagram (`pipeline_diagram.py`) is saved to `figures/fig_pipeline.png`.
 
@@ -157,7 +216,8 @@ All path components use only `[A-Za-z0-9_-]` (`-` → `m`, `.` → `p`), so the 
 2. Update `SYSTEM_NAME`, `T_UNITS_LABEL` and `POTENTIAL_FORMULA`.
 3. Set `BETA_MAX` (the cold end) for the new energy scale, and `NUM_STATES` as a starting guess. Leave `BETA_MIN = None` and the ξ settings at their defaults; the auto-tune loop adjusts them.
 4. Optionally set `SCAN_PARAM`/`SCAN_STEP`/`SCAN_COUNT` for Section 7.
-5. Run `python src/Quantum_HO_Master.py`. Use the Anaconda Python 3.7 environment, since the pipeline relies on matplotlib < 3.9.
+5. Check the candidate first with the quick scan (`python Quick_Scan.py` from `src/`; see "Quick Initial Scan").
+6. Run `python src/Quantum_HO_Master.py`. Use the Anaconda Python 3.7 environment for both scripts, since the pipeline relies on matplotlib < 3.9.
 
 ## Acknowledgements
 

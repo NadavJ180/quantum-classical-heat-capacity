@@ -86,7 +86,7 @@ These additions came while exploring the quartic/cubic/quadratic double well:
 
 As a candidate for "quantum $C_v$ above classical", this potential family, in this range of b, does not show the effect.
 
-**Section 6 cost and lighter grid factors (checked, not yet applied).** After the correction, Section 6's classical reference re-solves every ξ²V on a grid widened and refined by Section 2's factors (span×2, dx÷2). That took ~36 of the ~50 minutes of a full run. Lighter factors were measured on the full 1000-temperature grid ([`section6_grid_factor_check.py`](audit/classical_limit/section6_grid_factor_check.py), [`SECTION6_GRID_FACTORS.txt`](audit/classical_limit/SECTION6_GRID_FACTORS.txt)):
+**Section 6 cost and lighter grid factors (measured first, then applied; see below).** After the correction, Section 6's classical reference re-solves every ξ²V on a grid widened and refined by Section 2's factors (span×2, dx÷2). That took ~36 of the ~50 minutes of a full run. Lighter factors were measured on the full 1000-temperature grid ([`section6_grid_factor_check.py`](audit/classical_limit/section6_grid_factor_check.py), [`SECTION6_GRID_FACTORS.txt`](audit/classical_limit/SECTION6_GRID_FACTORS.txt)):
 
 | span / dx factor | reference sweep | largest grid | max relative difference to the base curve |
 |---|---|---|---|
@@ -94,7 +94,50 @@ As a candidate for "quantum $C_v$ above classical", this potential family, in th
 | 1.5 / 1.5 | 9.8 min | 7,192 pts | 5.4e-12 |
 | 1.25 / 1.25 | 5.7 min | 4,995 pts | 6.9e-12 |
 
-All three agree with the base at the round-off level. The classical curve is converged far beyond anything a factor can distinguish, so a lighter factor gives the same verification at a fraction of the cost. Applying it (as a separate classical-reference factor, keeping Section 2's cheap 2/2 for the spectrum) is pending a decision.
+All three agree with the base at the round-off level. The classical curve is converged far beyond anything a factor can distinguish, so a lighter factor gives the same verification at a fraction of the cost.
+
+### October 2026, continued: a lighter Section 6 reference and a quick initial scan
+
+**Section 6's classical reference gets its own grid.** The measurement above was applied as a separate pair of factors, `CLASSICAL_REFERENCE_SPAN_FACTOR` / `CLASSICAL_REFERENCE_DX_FACTOR` = 1.5 / 1.5.
+- **Cost.** Section 6 drops from ~36 to ~10 minutes, and a full run from ~1.4 h to ~1 h.
+- **The precise option.** The stricter 2 / 2 reference is kept: `CLASSICAL_REFERENCE_PRECISE = True` gives the classical reference Section 2's own factors (or the ones entered at the prompt in interactive mode).
+- **The quantum reference is unchanged.** Section 6's quantum benchmark still uses Section 2's 2 / 2 spectrum, which costs under a minute.
+- **Labels.** Each Section 6 figure and console summary now names the grid of its own reference. Both figures' two-line titles had been overlapping the legend and the top of the plot; they now have room.
+
+**Why a quick scan.** With a correct classical limit, the search for a potential whose quantum $C_v$ exceeds its own classical $C_v$ had a cost problem: each candidate took about an hour of the full pipeline. Most of that hour is verification (reference grids, Section 6, convergence figures), which matters only once a candidate is worth reporting. The requirements for a first-look tool were:
+- only the quantum/classical $C_v(T)$ graph, for one potential or for a sweep of one coefficient;
+- low resolution by default, so it runs quickly, with an option to raise the resolution when the result is not conclusive;
+- no new algorithm: the existing pipeline functions and the fully numerical ξ method. The exact classical integral (option A) is not used, since that decision is still open.
+
+**Design (`src/Quick_Scan.py`).** The quick scan is a thin driver over the pipeline's own functions:
+- the classical limit is `sweep_temperature_range` (ξ²V re-solved at every ξ), run with a `ScaledSpectra` cache built at the chosen resolution;
+- the quantum $C_v$ is `compute_quantum_heat_capacity_curve`;
+- the variants and the figure are Section 7's `generate_variant_params` and `plot_coefficient_sweep`.
+
+Only the settings change, through presets in `config.py` (`QUICK_SCAN_PRESETS`): fewer temperatures, a looser tolerance on the classical value, a coarser ξ ladder with a two-step plateau, fewer levels per solve and a looser DVR check. Resolution 3 is the full pipeline's own settings. The tolerance is the main lever, because the cold end needs the largest ξ and its cost grows as $\text{tol\_xi}^{-3/2}$ (FINDINGS, "The Quick Scan").
+
+Two consequences of reusing the pipeline:
+- **The quantum curve is free.** The ξ ladder starts at ξ = 1, and that rung, solved at the hottest temperature, is the spectrum of V itself.
+- **Every classical value carries an error estimate.** The scan's own ε was shown, during the verification of the correction, to match the true error closely. The quick scan uses it to call each temperature "above" (d > 2ε), "below" (d < −2ε) or "unresolved", and says when the only unresolved band is the hot tail, where the two curves merge anyway.
+  - The factor 2 came out of the validation. At resolution 1 the true error reached 1.10ε, and the coarse value always sits below the limit, which shifts d upward by about ε. A margin of 1 would therefore leave a false "above" possible exactly where the curves merge.
+
+The only changes to existing code are default-preserving:
+- `plot_coefficient_sweep` takes an optional title and save location, and returns the figure path, so the quick scan reuses Section 7's plot without overwriting its figure;
+- `config.py` gained the `QUICK_SCAN_*` settings.
+
+**Validation** ([`audit/quick_scan/`](audit/quick_scan/)).
+
+The quick scan was run on the six-variant double-well sweep at resolutions 1 and 2, and on the base potential at resolution 3. It was compared with the full pipeline (the stored full-resolution Section 7 curves, and the pipeline's own 500-level quantum curves) and with the exact classical $C_v$:
+- **Resolution 1** took 5 minutes for the sweep, against ~44 for Sections 4 + 7, and reached the same conclusion: every b below its own classical limit. Its classical curves were within 5.2e-3 of exact, and its quantum curves within 1.5e-7 of the full pipeline's.
+- **Resolution 2** took 11 minutes, with classical errors ≤ 3.0e-3.
+- **Resolution 3** reproduced the full pipeline's classical curve to 4e-12, as expected for the same computation.
+- At every resolution the true classical error was 1.01–1.10 times the scan's own estimate, and no resolved verdict had the wrong sign.
+
+A first validation pass also exposed two problems, both fixed before the pass was repeated:
+- a margin of 1 in the verdict was too thin (see above);
+- the validation script's interpolation assumed ascending temperatures.
+
+**Profiling, and an optimization left for approval.** At resolution 1 about half of the run time is not diagonalization. It is the WKB sizing of each solve in `ScaledSpectra`: a bisection that re-samples the potential on 40,001-point grids dozens of times per solve. A cheaper sizing would not change the method or its accuracy (it only picks how many levels to solve for, with margins on top), and would make the quick scan roughly twice as fast (and the full pipeline ~1 min faster). It changes the classical-limit engine, however, so it is listed as an open item instead of being applied.
 
 ## Version History
 
@@ -116,9 +159,13 @@ Pre-reorganization filenames carried explicit version suffixes (e.g. `DVR_Algori
 | `DVR_Limit_Finder` | 1.2 | Point annotations removed from the $\Delta x$ plot |
 | `Cv_Numerical_Benchmark` | 1.0 | New: base vs. reference Cv comparison (quantum + classical) |
 | `Cv_Numerical_Benchmark` | 1.1 | Classical reference re-solves every ξ²V on refined grids; data-scaled classical plot |
+| `Cv_Numerical_Benchmark` | 1.2 | Separate label for the classical reference grid (`classical_reference_label`), shown on its figure and in the console; the two-line titles no longer overlap the top panels |
 | `HO_Energy_Level_Error` | 1.1 | Docstring clarified — function is fully generic |
 | `Quantum_HO_Master` | 1.5 | Analytical sections removed; fully numerical pipeline (numerical reference is now the sole ground truth for Sections 3, 5, 6) |
+| `Quantum_HO_Master` | 1.6 | Section 6's classical reference on its own grid factors (`CLASSICAL_REFERENCE_*`, default 1.5/1.5), with the precise option `CLASSICAL_REFERENCE_PRECISE` (Section 2's 2/2) |
 | `Cv_AutoTune` | 1.0 | New: `BETA_MIN` auto-fill from $T_{\max}=10\Delta E/k_B$, and escalation diagnostics for the `NUM_STATES`/`XI_START` closed loop |
 | `Cv_AutoTune` | 1.1 | Escalation mapped to the corrected scan: `NUM_STATES` for the quantum curve only, ξ ladder on `max_steps`; `xi_cap`/`dvr_failed` reported, not escalated |
 | `Cv_Coefficient_Sweep` | 1.0 | New: Section 7 coefficient-sweep comparison plot (quantum $C_v(T)$ per variant vs. the base run's reused classical limit) |
 | `Cv_Coefficient_Sweep` | 1.1 | Each variant drawn against its own classical limit (quantum solid, classical dashed, same color) |
+| `Cv_Coefficient_Sweep` | 1.2 | `plot_coefficient_sweep` takes an optional title and save location (`title`, `category`, `name`) and returns the figure path, so the quick scan can reuse it |
+| `Quick_Scan` | 1.0 | New: quick, low-resolution quantum vs. classical $C_v(T)$ for one potential or a coefficient sweep, with a resolved/unresolved verdict; reuses the pipeline's functions |
