@@ -27,6 +27,7 @@ DVR computation on a finer/wider grid.
                      minimum dx and maximum n, both checked vs reference
     SECTION 6     -- Cv numerical benchmark     (Cv_Numerical_Benchmark)
                      quantum Cv and classical limit: base vs reference
+                     (classical reference grid: config.CLASSICAL_REFERENCE_*)
     SECTION 7     -- Coefficient sweep          (Cv_Coefficient_Sweep)
                      quantum Cv(T) across several variants of the base
                      potential (one named POTENTIAL_PARAMS coefficient
@@ -75,6 +76,10 @@ from config                         import (MASS, HBAR, my_potential,
                                             INTERACTIVE_REFERENCE_SCALING,
                                             REFERENCE_SPAN_FACTOR,
                                             REFERENCE_DX_FACTOR, ref_label,
+                                            reference_label,
+                                            CLASSICAL_REFERENCE_SPAN_FACTOR,
+                                            CLASSICAL_REFERENCE_DX_FACTOR,
+                                            CLASSICAL_REFERENCE_PRECISE,
                                             AUTO_ESCALATE, MAX_ESCALATION_ROUNDS,
                                             NUM_STATES_GROWTH, NUM_STATES_CAP,
                                             XI_START_GROWTH, MAX_XI_STEPS_GROWTH,
@@ -355,16 +360,27 @@ if __name__ == "__main__":
 
     # =================================================================
     # SECTION 6 -- Cv numerical benchmark
-    # Quantum Cv from the reference energies; classical limit from the
-    # xi-scan with every xi^2 V solve done on a grid widened/refined by
-    # the same factors Section 2 used. Compares both curves against the
-    # base results from Section 4. Produces:
+    # Quantum Cv from Section 2's reference energies; classical limit from
+    # the xi-scan with every xi^2 V solve done on a widened/refined grid:
+    # CLASSICAL_REFERENCE_SPAN_FACTOR / _DX_FACTOR (1.5 / 1.5, a quarter of
+    # the cost of 2 / 2 with the same ~1e-12 agreement -- see config.py),
+    # or Section 2's own factors when CLASSICAL_REFERENCE_PRECISE is True.
+    # Compares both curves against the base results from Section 4.
+    # Produces:
     #   Figure 1: quantum Cv(T) base vs reference + error panel
     #   Figure 2: classical limit Cv(T) base vs reference + error panel
     # =================================================================
     print("\n" + "="*60)
     print("  SECTION 6 — Cv numerical benchmark (base vs reference)")
     print("="*60)
+
+    if CLASSICAL_REFERENCE_PRECISE:
+        classical_span_factor = reference_result["span_factor"]
+        classical_dx_factor = reference_result["dx_factor"]
+    else:
+        classical_span_factor = CLASSICAL_REFERENCE_SPAN_FACTOR
+        classical_dx_factor = CLASSICAL_REFERENCE_DX_FACTOR
+    classical_ref_label = reference_label(classical_span_factor, classical_dx_factor)
 
     with SimpleTimer("Section 6: reference Cv sweep"):
         cv_benchmark_results = run_cv_numerical_benchmark(
@@ -379,8 +395,9 @@ if __name__ == "__main__":
             xi_multiplier=XI_MULT, max_xi_steps=MAX_XI_STEPS,
             tol_cv=TOL_CV, min_stable_n=MIN_STABLE_N,
             mass=MASS, hbar=HBAR, thermal_coverage=HOT_STATE_SAFETY, xi_max=XI_MAX,
-            span_factor=reference_result["span_factor"],
-            dx_factor=reference_result["dx_factor"],
+            span_factor=classical_span_factor,
+            dx_factor=classical_dx_factor,
+            classical_reference_label=classical_ref_label,
             T_units_label=T_UNITS_LABEL,
         )
 

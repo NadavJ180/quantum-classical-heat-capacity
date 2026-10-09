@@ -26,7 +26,11 @@ Classical limit: the xi-scan does not use the base spectrum at all --
 it re-solves the scaled potential xi^2 V at every xi (see
 Classical_Limit_Numerical.py). Its reference is therefore the same
 xi-scan with EVERY one of those scaled solves done on a grid widened
-and refined by the same span_factor/dx_factor Section 2 uses for V.
+and refined by span_factor/dx_factor: config.CLASSICAL_REFERENCE_SPAN_
+FACTOR / _DX_FACTOR (1.5 / 1.5 by default), or Section 2's own factors
+(2 / 2) when config.CLASSICAL_REFERENCE_PRECISE is True. On the double
+well both agree with the base curve to ~5e-12, and 1.5 / 1.5 costs a
+quarter of the time (audit/classical_limit/SECTION6_GRID_FACTORS.txt).
 Agreement shows the classical curve is converged in the grid; it does
 not, by itself, test the method (an error shared by both runs would
 cancel -- see audit/classical_limit/AUDIT.md for how that happened
@@ -260,7 +264,8 @@ def plot_quantum_cv_comparison(T_arr, cv_base, cv_ref, error_result,
     ax_bot.set_ylabel(r"$|Cv_{\rm base} - Cv_{\rm ref}|$", fontsize=11)
     ax_bot.set_yscale("log")
     ax_bot.grid(True, linestyle="--", alpha=0.4)
-    plt.tight_layout()
+    # Leave room for the two-line suptitle (tight_layout ignores it).
+    plt.tight_layout(rect=[0, 0, 1, 0.94])
     save_figure(fig, "cv", "quantum_cv_benchmark")
 
 
@@ -360,14 +365,16 @@ def plot_classical_limit_comparison(T_arr, cv_classical_base, cv_classical_ref,
     )
     ax_bot.set_yscale("log")
     ax_bot.grid(True, linestyle="--", alpha=0.4)
-    plt.tight_layout()
+    # Leave room for the two-line suptitle (tight_layout ignores it).
+    plt.tight_layout(rect=[0, 0, 1, 0.94])
     save_figure(fig, "cv", "classical_limit_cv_benchmark")
 
 
 # =====================================================================
 # Print summary to console
 # =====================================================================
-def print_cv_benchmark_summary(quantum_err, classical_err, system_name, reference_label):
+def print_cv_benchmark_summary(quantum_err, classical_err, system_name, reference_label,
+                               classical_reference_label=None):
     """
     Print a concise numerical summary of base vs reference Cv errors,
     using the same error metric as the corresponding plot:
@@ -382,14 +389,19 @@ def print_cv_benchmark_summary(quantum_err, classical_err, system_name, referenc
         (for classical).
     system_name : str
     reference_label : str
+        Grid of the quantum reference (Section 2's spectrum).
+    classical_reference_label : str or None, optional
+        Grid of the classical-limit reference (None = `reference_label`).
 
     Returns
     -------
     None (prints to stdout).
     """
+    classical_reference_label = classical_reference_label or reference_label
     print(f"\n{'-'*60}")
     print(f"  {system_name}: Cv numerical benchmark")
-    print(f"  Reference: {reference_label}")
+    print(f"  Quantum reference:   {reference_label}")
+    print(f"  Classical reference: {classical_reference_label}")
     print(f"{'-'*60}")
     print(f"  Quantum Cv(T)  [absolute error |ΔCv|]:")
     print(f"    mean = {quantum_err['mean_abs']:.3e}")
@@ -410,6 +422,7 @@ def run_cv_numerical_benchmark(base_cv_results, reference_energies, potential_fu
                                 tol_cv, min_stable_n,
                                 mass=1.0, hbar=1.0, thermal_coverage=20.0, xi_max=np.inf,
                                 span_factor=2.0, dx_factor=2.0,
+                                classical_reference_label=None,
                                 T_units_label=r"$k_B T / \hbar\omega$"):
     """
     Full numerical Cv benchmark:
@@ -457,7 +470,12 @@ def run_cv_numerical_benchmark(base_cv_results, reference_energies, potential_fu
         Should match the base pipeline.
     span_factor, dx_factor : float, optional
         Grid widening/refinement for every reference xi^2 V solve --
-        normally the same factors Section 2 used for the reference spectrum.
+        config.CLASSICAL_REFERENCE_SPAN_FACTOR / _DX_FACTOR, or Section 2's
+        own factors when config.CLASSICAL_REFERENCE_PRECISE is True.
+    classical_reference_label : str or None, optional
+        Label of the classical reference grid, shown on Figure 2 and in
+        the console summary (None = `reference_label`, i.e. the same
+        grid as the quantum reference).
     T_units_label : str, optional
         LaTeX x-axis label for both Cv plots
         (default r"$k_B T / \\hbar\\omega$").
@@ -473,9 +491,11 @@ def run_cv_numerical_benchmark(base_cv_results, reference_energies, potential_fu
                                    max_rel_idx
         classical_error : dict  -- same structure as quantum_error
     """
+    classical_reference_label = classical_reference_label or reference_label
     print(f"\n{'='*60}")
     print(f"  Cv Numerical Benchmark: {system_name}")
-    print(f"  Reference: {reference_label}")
+    print(f"  Quantum reference:   {reference_label}")
+    print(f"  Classical reference: {classical_reference_label}")
     print(f"{'='*60}")
 
     # Reference quantum Cv from the reference energies; reference classical
@@ -501,7 +521,8 @@ def run_cv_numerical_benchmark(base_cv_results, reference_energies, potential_fu
 
     T_arr = 1.0 / beta_arr
 
-    print_cv_benchmark_summary(quantum_err, classical_err, system_name, reference_label)
+    print_cv_benchmark_summary(quantum_err, classical_err, system_name, reference_label,
+                               classical_reference_label)
 
     plot_quantum_cv_comparison(
         T_arr, base_cv_results["cv_quantum"], ref_cv_results["cv_quantum"],
@@ -509,7 +530,7 @@ def run_cv_numerical_benchmark(base_cv_results, reference_energies, potential_fu
     )
     plot_classical_limit_comparison(
         T_arr, base_cv_results["cv_classical"], ref_cv_results["cv_classical"],
-        classical_err, system_name, reference_label, T_units_label,
+        classical_err, system_name, classical_reference_label, T_units_label,
     )
 
     return {

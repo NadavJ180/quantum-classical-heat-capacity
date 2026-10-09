@@ -157,7 +157,7 @@ MIN_STABLE_N  = 3
 # --- DVR limit analysis tolerance (Section 5) ---
 LIMIT_TOLERANCE = 1e-6
 
-# --- Numerical reference scaling (Sections 2, 3, 5, 6) ---
+# --- Numerical reference scaling (Sections 2, 3, 5, and Section 6's quantum Cv) ---
 # REFERENCE_SPAN_FACTOR: multiply base span by this (2.0 = double L)
 # REFERENCE_DX_FACTOR:   divide base dx   by this (2.0 = halve Δx)
 # Set INTERACTIVE = True to be prompted at runtime instead.
@@ -165,7 +165,30 @@ INTERACTIVE_REFERENCE_SCALING = False
 REFERENCE_SPAN_FACTOR         = 2.0
 REFERENCE_DX_FACTOR           = 2.0
 
-# Human-readable label built from the scaling factors (used in plots).
-ref_label = (f"numerical reference  "
-             f"(span\u00d7{REFERENCE_SPAN_FACTOR:.2g}, "
-             f"dx\u00f7{REFERENCE_DX_FACTOR:.2g})")
+# --- Section 6: grid of the classical-limit reference ---
+# Section 6's quantum Cv reference reuses Section 2's spectrum (no extra
+# cost). Its classical-limit reference re-runs the whole xi-scan with
+# every xi^2 V solve on a widened/refined grid -- the most expensive step
+# of the pipeline. Measured on the double well, 1000 temperatures
+# (audit/classical_limit/SECTION6_GRID_FACTORS.txt):
+#     span x2,   dx /2   : 36.3 min, max rel. difference to the base 5.5e-12
+#     span x1.5, dx /1.5 :  9.8 min, max rel. difference to the base 5.4e-12
+# 1.5/1.5 still changes both the span and the spacing of every solve by
+# 50%, so a base grid that is too narrow or too coarse still shows up.
+# CLASSICAL_REFERENCE_PRECISE = True is the stricter, slower option: the
+# classical reference then uses Section 2's own factors
+# (REFERENCE_SPAN_FACTOR / REFERENCE_DX_FACTOR, or the ones entered at the
+# prompt when INTERACTIVE_REFERENCE_SCALING is on).
+CLASSICAL_REFERENCE_SPAN_FACTOR = 1.5
+CLASSICAL_REFERENCE_DX_FACTOR   = 1.5
+CLASSICAL_REFERENCE_PRECISE     = False
+
+
+def reference_label(span_factor, dx_factor):
+    """Human-readable label for a reference grid (used in plots)."""
+    return (f"numerical reference  "
+            f"(span×{span_factor:.2g}, "
+            f"dx÷{dx_factor:.2g})")
+
+
+ref_label = reference_label(REFERENCE_SPAN_FACTOR, REFERENCE_DX_FACTOR)
