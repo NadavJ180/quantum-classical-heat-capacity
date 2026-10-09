@@ -291,7 +291,7 @@ Compared with the full pipeline (the stored full-resolution Section 7 curves, [`
 - **Resolution 3 is the full pipeline.** Its classical curve is identical to the full run's to 4e-12.
 - **Cheaper cold end.** The coarse tolerance reaches its plateau at a lower ξ: b = −0.9 needs ξ ≈ 985 at resolution 1, against 1,972 at full resolution.
 
-**Open item: the WKB sizing overhead (not applied, needs your approval).** Profiling resolution 1 on the base double well (17 solves, ~48 s) showed that about half of the time goes not to diagonalization but to `ScaledSpectra`'s WKB sizing. `_wkb_energy_for_count` bisects 60 times, and every step re-samples V on a 40,001-point window grown from scratch (`_allowed_region`). Sampling V once per cache, or bisecting to a relative 1e-6 instead of 60 halvings, would not change the method or its accuracy (the sizing only picks how many levels to solve for, with margins on top), and would make the quick scan roughly twice as fast (the full pipeline ~1 min faster). It is a change to the classical-limit engine, so it is left for your decision.
+**Open item: the WKB sizing overhead (not applied, needs your approval; resolved inside the quick scan in 8d).** Profiling resolution 1 on the base double well (17 solves, ~48 s) showed that about half of the time goes not to diagonalization but to `ScaledSpectra`'s WKB sizing. `_wkb_energy_for_count` bisects 60 times, and every step re-samples V on a 40,001-point window grown from scratch (`_allowed_region`). Sampling V once per cache, or bisecting to a relative 1e-6 instead of 60 halvings, would not change the method or its accuracy (the sizing only picks how many levels to solve for, with margins on top), and would make the quick scan roughly twice as fast (the full pipeline ~1 min faster). It is a change to the classical-limit engine, so it is left for your decision.
 
 ### 8c. Documentation
 
@@ -299,3 +299,34 @@ Compared with the full pipeline (the stored full-resolution Section 7 curves, [`
 - **`FINDINGS.md`:** a physics subsection "The Quick Scan" (why a looser tolerance is cheap, why the hot tail stays unresolved); the quick-scan validation results; the new parameters; the Section 6 factor paragraph (now the default, with when to use the precise option); the quick-scan figure in the plot table; troubleshooting entries.
 - **`HISTORY.md`:** the October 2026 chapter continues with the Section 6 change and the motivation, design, validation and profiling of the quick scan; four new version-table rows.
 - **Not touched:** the `.tex` files.
+
+### 8d. Follow-up: the sizing speed-up and a hot-end limit (quick scan only)
+
+**Condition.** The sizing speed-up could be applied only if the full scan's classical-limit engine stayed untouched. `Classical_Limit_Numerical.py` is unchanged; everything below lives in the quick scan.
+
+**`src/Quick_Scan.py`**
+- **`RememberedPotential`.** It wraps V and returns a copy of the stored output whenever V is called again on an identical input array (the last 64 inputs). The quick scan hands it to the engine for every potential. The engine's WKB sizing re-samples V on the same 40,001-point windows dozens of times per solve, and those repeats are now free.
+- **`_estimated_grid` and `hottest_feasible_T`.** The first estimates the DVR grid one ξ-scan solve needs at temperature T, from the engine's own sizing formula (1.15 × the WKB level count at ħ/ξ up to $E_0$ + 1.2 × coverage × $k_BT$, plus 10, times 4 points per level). The second bisects for the hottest temperature whose grid stays within `QUICK_SCAN_MAX_GRID`, checked at ξ = `xi_mult`^`min_stable_xi`, the earliest a plateau can end.
+- **`scan_potential`.** Temperatures above that limit are skipped: both curves are NaN there, and a note gives the grid, level count, matrix size and hottest feasible T. If all temperatures are too hot, it raises an error with that explanation instead of attempting the solve.
+- **`compare_quantum_classical`.** It takes `skipped`. Skipped temperatures are neither "missing" nor part of the hot-tail test.
+- **Output.**
+  - The summary has a "too hot" column.
+  - No empty figure is saved when nothing was computed.
+  - A `MemoryError` gets a one-line hint.
+  - Differences print in scientific format: −0.0000 hid differences of 1e-5.
+- **Docstring.** The module docstring has two new sections.
+
+**`src/config.py`:** `QUICK_SCAN_MAX_GRID` = 6000. It is a soft limit, since the estimate can fall a few percent short.
+
+**`audit/quick_scan/validate_quick_scan.py`:** pins the validated setup (b = −0.5, `BETA_MAX` 50, no zoom window, the b sweep) with `setattr` on `config`, so local experiments in `config.py` cannot change what it checks.
+
+**Evidence.**
+- **Bit-identical:** `cv_quantum`, `cv_classical`, `error_estimate` and the spectrum, base double well at resolution 1.
+- **Speed:** 10.7 s instead of 26.0 s (Python 3.12 environment), 16.6 s instead of 31.6 s (Anaconda 3.7). Re-run of the validation: the six-variant sweep took 117 s instead of 299 s at resolution 1, and 277 s instead of 637 s at resolution 2. Resolution 3 on the base potential took 363 s instead of 595 s. The errors are unchanged, since the numbers are identical.
+- **b = −10, T = 10⁴–10⁵ (the reported failure):** stops in under a second. At T = 10⁴ it would need ~83,000 grid points (~21,000 levels, a 56 GB matrix); the hottest feasible T is ≈ 1,170.
+- **b = −10, T = 10–10⁴:** 41 of 60 temperatures computed and 19 skipped, in 264 s. The largest grid used was 6,257 points, hence "soft limit". Verdict: below at every computed temperature, the curves merging to within a few 1e-5 by T ≈ 1,000.
+
+**Documentation.**
+- **README:** the quick-scan section explains the speed-up and the "too hot" temperatures (with the b = −10 example), and the usage gains a "too hot" case.
+- **FINDINGS:** the "Quick Scan" physics subsection covers the speed-up and why very hot temperatures are out of reach yet cost little. Results gain a b = −10 entry; parameters, `QUICK_SCAN_MAX_GRID`; troubleshooting, a "too hot" entry.
+- **HISTORY:** the chapter continues with both changes; new version row `Quick_Scan` 1.1.

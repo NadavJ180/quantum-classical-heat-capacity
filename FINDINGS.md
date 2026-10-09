@@ -91,6 +91,20 @@ In practice the reported value approaches the limit from below by almost exactly
   - the looser DVR tolerance only relaxes the pass/fail threshold of the 3-pass check.
 - **The quantum curve is free.** The ladder starts at ξ = 1, and that rung, solved at the hottest temperature, is the spectrum of V itself, from the same DVR and 3-pass check.
 
+**Faster sizing without touching the engine.** About half of a resolution-1 run went to the engine's WKB sizing of each solve: a bisection that re-samples V on the same 40,001-point windows dozens of times. The quick scan hands the engine a potential that remembers its recent evaluations (`RememberedPotential`). Results are bit-identical. A resolution-1 run of the base double well took 10.7 s instead of 26.0 s, and the six-variant sweep 117 s instead of 299 s. `Classical_Limit_Numerical.py` is unchanged, so the full pipeline is unaffected.
+
+**Why very hot temperatures are out of reach, and why little is lost.** The scan keeps every level up to $E_0+$ `thermal_coverage`·$k_BT$, and the number of levels below an energy E is $N(E)\approx\frac1{\pi\hbar}\oint p\,dx$ (WKB). That number grows with T (∝ T for a harmonic well, ∝ $T^{3/4}$ for a quartic one), and ∝ ξ, because ξ²V has the level density of V at ħ/ξ. The DVR grid is at least 4N points, and a dense solve costs ∝ grid³ in time and 8·grid² bytes. The quick scan estimates this grid from the engine's own sizing before solving, and skips temperatures above `QUICK_SCAN_MAX_GRID`.
+
+The example that prompted this is b = −10. Its deep well sits at x ≈ 30 with V ≈ −67,950 and ħω ≈ 30. The region near x = 0 lies about 68,000 higher, so it only becomes accessible at $k_BT\sim10^4$. At resolution 1, one solve would need:
+
+| T | levels (at the plateau's ξ = 2.25) | dense matrix |
+|---|---|---|
+| 10³ | ~1,300 | ~0.2 GB |
+| 10⁴ | ~21,000 | ~56 GB |
+| 10⁵ | ~127,000 | ~2 TB |
+
+The last row is the 379 GiB allocation error at ξ = 1, before this guard existed. At those temperatures, however, $k_BT$ is hundreds of level spacings. The quantum correction to $C_v$ is then of order $(\beta\hbar\omega)^2/12\sim10^{-6}$–$10^{-5}$ (Wigner–Kirkwood). Whatever the classical $C_v$ does there, the quantum one follows it to far better than any resolution here, so no quantum excess can be resolved in that range.
+
 **Reading "quantum above classical".** Each classical value carries the scan's estimate ε of its remaining distance to the limit, and the true error tracks it to within ~10% (results below). The difference d = $C_v^q-C_v^{cl}$ counts as resolved only where |d| > 2ε. The margin is needed because the approach is one-sided: a coarse classical value sits *below* the limit by about ε, so the measured d is shifted upward by about ε. Wherever the true d is close to zero, a margin of 1 could therefore turn it into a false "above". With 2, that would need the error to exceed twice its estimate.
 
 At high T the two curves merge: the quantum correction falls off as ħ²β² (Wigner–Kirkwood), so d → 0. At the hottest temperatures |d| eventually drops below any finite ε, and an unresolved band at the hot end is expected at any resolution. Unresolved temperatures elsewhere mean the resolution is too low for that window.
@@ -125,15 +139,19 @@ At high T the two curves merge: the quantum correction falls off as ħ²β² (Wi
     - In the symmetric case (b = 0) both wells are equivalent, so that two-region contribution largely disappears.
   - **Ladder margin.** The stiffer the deep well, the larger the ξ the coldest temperatures need. b = −0.9 reached ξ ≈ 1972, the last rung of the default ladder, with all temperatures converged but no spare margin. More negative b, or a colder `BETA_MAX`, will need a longer ladder (`MAX_XI_STEPS`, `XI_MAX`). Section 7 variants do not auto-escalate.
 
+- **b = −10 (quick scan, resolution 1).** The deep well is nearly harmonic (ħω ≈ 30).
+  - The quantum $C_v$ is below the classical one at every temperature computed, T = 1 to ≈1,170. The two merge to within a few 1e-5 by T ≈ 1,000, as the harmonic estimate $(\beta\hbar\omega)^2/12\approx6\times10^{-5}$ predicts.
+  - The second region (x ≈ 0, ~68,000 above the deep minimum) is out of DVR reach, for the reason above.
+
 - **Quick scan, validated on the same sweep** ([`audit/quick_scan/QUICK_SCAN_VALIDATION.txt`](audit/quick_scan/QUICK_SCAN_VALIDATION.txt)). It was compared with the full pipeline (the stored full-resolution Section 7 curves and the 500-level quantum curves) and with the exact classical $C_v$:
 
   | resolution | run | time | quantum vs full pipeline | classical error vs exact | true error ÷ estimate | wrong resolved verdicts |
   |---|---|---|---|---|---|---|
-  | 1 | six-variant sweep | 5.0 min | ≤ 1.5e-7 | ≤ 5.2e-3 | 1.03–1.10 | 0 |
-  | 2 | six-variant sweep | 10.6 min | ≤ 1.8e-9 | ≤ 3.0e-3 | 1.01–1.04 | 0 |
-  | 3 | b = −0.5 only | 9.9 min | 2.2e-12 | 8.4e-4 | 1.01 | 0 |
+  | 1 | six-variant sweep | 2.0 min | ≤ 1.5e-7 | ≤ 5.2e-3 | 1.03–1.10 | 0 |
+  | 2 | six-variant sweep | 4.6 min | ≤ 1.8e-9 | ≤ 3.0e-3 | 1.01–1.04 | 0 |
+  | 3 | b = −0.5 only | 6.1 min | 2.2e-12 | 8.4e-4 | 1.01 | 0 |
 
-  - **Resolution 1 reaches the full run's conclusion in 5 minutes instead of ~44:** every b below its own classical limit at every temperature. The closest approach is at the hottest temperature, by about 1e-3, still resolved there (|d| ≈ 4ε).
+  - **Resolution 1 reaches the full run's conclusion in 2 minutes instead of ~44:** every b below its own classical limit at every temperature. The closest approach is at the hottest temperature, by about 1e-3, still resolved there (|d| ≈ 4ε).
   - **The error estimate is honest at low resolution too.** The coarse classical value always sits below the limit, by about its own estimate.
   - **Resolution 3 is the full pipeline.** Its classical curve is identical to the full run's to 4e-12.
 
@@ -170,6 +188,7 @@ At high T the two curves merge: the quantum correction falls off as ħ²β² (Wi
 | `AUTO_ESCALATE`, `MAX_ESCALATION_ROUNDS`, `NUM_STATES_GROWTH`, `NUM_STATES_CAP`, `XI_START_GROWTH`, `MAX_XI_STEPS_GROWTH`, `ESCALATION_FRACTION_THRESHOLD` | Control the auto-tune loop (see README). Meant to be touched rarely. |
 | `SCAN_PARAM`, `SCAN_STEP`, `SCAN_COUNT`, `SCAN_SYMMETRIC_VALUE` | Section 7: which coefficient is swept, its spacing, the extra variants per side, and an optional symmetric reference value. The quick scan's `"sweep"` mode uses the same four. |
 | `QUICK_SCAN_MODE`, `QUICK_SCAN_RESOLUTION`, `QUICK_SCAN_BETA_RANGE` | `Quick_Scan.py`: one potential (`"single"`) or the Section 7 sweep (`"sweep"`); which preset; an optional (β_min, β_max) zoom window (`None` = `BETA_MIN`/`BETA_MAX`). |
+| `QUICK_SCAN_MAX_GRID` | Approximate largest DVR grid (points) the quick scan attempts (default 6,000). Hotter temperatures are skipped as "too hot", with the hottest feasible one printed. A solve costs ∝ grid³. |
 | `QUICK_SCAN_PRESETS` | Per resolution: `n_beta`, `tol_xi`, `xi_mult`, `min_stable_xi`, `thermal_coverage` and `dvr_tolerance`, with the same meanings as the pipeline's `N_BETA`, `TOL_XI`, `XI_MULT`, `MIN_STABLE_XI` and `HOT_STATE_SAFETY`, and the DVR's 3-pass tolerance. The ladder always runs from `XI_START` up to `XI_MAX`. Resolution 3 is the full pipeline's own settings. |
 
 **Section 6 reference factors.** With 2/2, Section 6's classical reference sweep took ~36 min for the double well. Lighter factors agree with the base curve equally well, all at round-off. The default is therefore 1.5/1.5, with 2/2 kept as the `CLASSICAL_REFERENCE_PRECISE` option:
@@ -202,4 +221,5 @@ The auto-tune loop handles the two common cases automatically (README, "Auto-Tun
 - **A long run seems stuck at the cold end.** The largest-ξ solves are the most expensive (several seconds each in Sections 1 & 4, and longer on Section 6's refined grids). The progress bar's rate slows there, which is expected.
 - **Section 6's classical error panel is not at round-off level.** Re-run it with `CLASSICAL_REFERENCE_PRECISE = True` to see whether the difference persists on the stricter 2/2 grid. If it does, the base grid of the scaled solves is not converged.
 - **Quick scan verdict "unresolved" outside the hot tail.** The difference between the curves there is within the classical value's error at this resolution. Raise `QUICK_SCAN_RESOLUTION`, or zoom with `QUICK_SCAN_BETA_RANGE` onto that window (cheaper without the cold end) and raise it there.
+- **Quick scan says "too hot", or stops at once.** The window contains temperatures whose DVR would exceed `QUICK_SCAN_MAX_GRID` points: too many thermally accessible levels. Use the hottest feasible temperature it prints as the hot end of `QUICK_SCAN_BETA_RANGE`. Raising the limit is possible, but each doubling costs ~8× in time. At such temperatures the quantum and classical $C_v$ agree to $O((\hbar\omega/k_BT)^2)$ anyway.
 - **Quick scan classical curve has gaps (†).** The ladder hit `XI_MAX` (`xi_cap`) or a solve failed. Narrow the window to warmer temperatures, or raise `XI_MAX` deliberately.

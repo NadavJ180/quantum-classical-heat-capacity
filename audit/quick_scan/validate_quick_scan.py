@@ -30,7 +30,7 @@ classical curves of the full-resolution Section 7 run (Sections 1 & 4
 
 Writes QUICK_SCAN_VALIDATION.txt and the quick-scan figures under
 figures/. Run from this folder:  python -u validate_quick_scan.py
-(~35 minutes).
+(~20 minutes).
 =====================================================================
 """
 import functools
@@ -59,6 +59,15 @@ from Quantum_Classical_Combined import compute_quantum_heat_capacity_curve
 from audit_classical_limit import exact_classical_R
 
 OUT = []
+
+# The setup this validation is about, pinned so that local experiments in
+# config.py (another potential, a zoom window, ...) cannot change it. These
+# are the values of the full-resolution run in full_resolution_section7.npz.
+VALIDATED = dict(
+    POTENTIAL_PARAMS={"a": 0.25, "b": -0.5, "c": -0.5, "d": 0.0},
+    BETA_MIN=None, BETA_MAX=50.0, QUICK_SCAN_BETA_RANGE=None,
+    SCAN_PARAM="b", SCAN_STEP=0.2, SCAN_COUNT=2, SCAN_SYMMETRIC_VALUE=0.0,
+)
 
 
 def log(line=""):
@@ -119,6 +128,8 @@ def main():
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
     output_paths.FIGURES_ROOT = os.path.join(HERE, "figures")
+    for name, value in VALIDATED.items():
+        setattr(config, name, value)
     full = np.load(os.path.join(HERE, "full_resolution_section7.npz"))
 
     log(f"Quick-scan validation, {time.strftime('%Y-%m-%d %H:%M')}: potential {config.POTENTIAL_PARAMS}, "

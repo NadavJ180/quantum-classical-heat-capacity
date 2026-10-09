@@ -5,7 +5,7 @@ A modular, system-agnostic numerical pipeline for the heat capacity $C_v(T)$ of 
 - **Quantum $C_v(T)$:** computed from an energy spectrum obtained with the Discrete Variable Representation (DVR).
 - **Classical limit:** found with the ξ-scaling of Gelbwaser-Klimovsky et al.: scale the potential and the temperature together, V → ξ²V and T → ξ²T, re-solve the Schrödinger equation for ξ²V at every ξ, and follow $C_v$ to its plateau. This is ħ → ħ/ξ at fixed V and T.
 - **Self-validating:** every result is checked against an independently generated, higher-resolution numerical reference rather than a closed-form formula, so the same checks work for potentials with no analytic solution.
-- **Quick initial scan:** [`src/Quick_Scan.py`](src/Quick_Scan.py) draws only the quantum and classical $C_v(T)$ of one potential, or of a coefficient sweep, with the same ξ method at a lower resolution. It takes about a minute per potential, so a candidate can be checked before a full run (about an hour) is committed to it.
+- **Quick initial scan:** [`src/Quick_Scan.py`](src/Quick_Scan.py) draws only the quantum and classical $C_v(T)$ of one potential, or of a coefficient sweep, with the same ξ method at a lower resolution. It takes about 20 seconds per potential at the lowest resolution, so a candidate can be checked before a full run (about an hour) is committed to it.
 
 **Status:**
 - The harmonic oscillator (HO) is validated against its exact solution.
@@ -88,7 +88,7 @@ Only the potential block of `config.py` needs editing to run on a new potential.
 | Section 6 | ~10 min with the default 1.5 / 1.5 classical reference; ~36 min with `CLASSICAL_REFERENCE_PRECISE = True` (2 / 2) |
 | Section 7 | ~6–8 min per non-base variant (one classical sweep each); ~37 min for the default six-variant sweep |
 | **Full run** | **~1 h** (~1.4 h with the precise Section 6 reference) |
-| `Quick_Scan.py` (separate) | resolution 1: ~1 min per potential (5 min for the six-variant sweep); resolution 2: ~2 min per potential (11 min); resolution 3 (the full settings): ~7–10 min per potential |
+| `Quick_Scan.py` (separate) | resolution 1: ~20 s per potential (2 min for the six-variant sweep); resolution 2: ~50 s per potential (4.6 min); resolution 3 (the full settings): ~6 min per potential |
 
 ## Classical Limit
 
@@ -152,13 +152,21 @@ Behaviors to know:
 
 Only the settings are coarser. The quantum spectrum costs nothing extra: the ξ ladder starts at ξ = 1, and that rung, solved at the hottest temperature, is the spectrum of V itself.
 
+The engine re-evaluates V on the same grids many times while sizing each solve. The quick scan hands it a potential that remembers its recent evaluations (`RememberedPotential`), which makes it about 2.5 times as fast. The results are bit-identical, and the classical-limit engine itself is untouched.
+
+**Temperatures too hot for a DVR.** Every temperature needs all its thermally accessible levels, and their number grows with T. A dense DVR solve costs ~grid³ time and 8·grid² bytes (measured here: 1 s at 2,000 points, 6 s at 4,000, 44 s at 8,000). Before solving, the quick scan therefore estimates the grid each temperature needs, from the engine's own level sizing:
+- temperatures needing more than `QUICK_SCAN_MAX_GRID` points (default 6,000; a soft limit) are skipped and reported as "too hot", with the hottest feasible temperature;
+- a window that is too hot everywhere stops at once with that explanation, instead of attempting a matrix that cannot fit in memory.
+
+For example, b = −10 has ħω ≈ 30 in its deep well, and its second region opens only at $k_BT\sim10^4$. There, a single solve of the ξ-scan would need ~2×10⁴ levels, i.e. a 56 GB matrix (resolution 1). Physically little is lost: at $k_BT$ of hundreds of level spacings, the quantum corrections to $C_v$ are of order $(\hbar\omega/k_BT)^2\sim10^{-5}$ (FINDINGS, "The Quick Scan").
+
 **Resolutions** (`QUICK_SCAN_PRESETS` in `config.py`). Measured on the double well:
 
 | resolution | temperatures | `tol_xi` | ξ ladder | plateau | levels kept up to | DVR tolerance | time per potential | six-variant sweep | classical error (measured) |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | 60 | 1e-2 | ×1.5 | 2 steps | $E_0+12\,k_BT$ | 1e-3 | ~50 s | 5 min | ≤ 5.2e-3 |
-| 2 | 150 | 5e-3 | ×1.35 | 2 steps | $E_0+15\,k_BT$ | 1e-4 | ~1.8 min | 11 min | ≤ 3.0e-3 |
-| 3 | 1000 | 2e-3 | ×1.25 | 3 steps | $E_0+20\,k_BT$ | 1e-5 | ~7–10 min | ≈ Sections 4 + 7 (~44 min) | ≤ 8.4e-4 |
+| 1 | 60 | 1e-2 | ×1.5 | 2 steps | $E_0+12\,k_BT$ | 1e-3 | ~20 s | 2.0 min | ≤ 5.2e-3 |
+| 2 | 150 | 5e-3 | ×1.35 | 2 steps | $E_0+15\,k_BT$ | 1e-4 | ~50 s | 4.6 min | ≤ 3.0e-3 |
+| 3 | 1000 | 2e-3 | ×1.25 | 3 steps | $E_0+20\,k_BT$ | 1e-5 | ~6 min | ≈ Sections 4 + 7 (~44 min) | ≤ 8.4e-4 |
 
 At every resolution, the quantum curve matched the full pipeline's to ≤ 1.5e-7, and the true classical error was 1.01–1.10 times the scan's own estimate. The details are in [`audit/quick_scan/QUICK_SCAN_VALIDATION.txt`](audit/quick_scan/QUICK_SCAN_VALIDATION.txt).
 
@@ -186,6 +194,7 @@ The console prints one line per potential and a summary table. At high T the qua
    - **below** everywhere: no quantum excess at this resolution. The printed closest approach tells you by how much.
    - **ABOVE**: a candidate. Confirm it at a higher resolution, then with the full pipeline.
    - **unresolved** outside the hot tail, or gaps in a classical curve (†): raise the resolution, or zoom into that window with `QUICK_SCAN_BETA_RANGE` (`--beta-range`) and raise it there. A window that leaves out the cold end is much cheaper.
+   - **too hot** temperatures: the window reaches temperatures where the DVR would need more than `QUICK_SCAN_MAX_GRID` points. Narrow the window to the hottest feasible temperature printed, or raise the limit, knowing that the cost grows as grid³.
 4. Run the full pipeline (`Quantum_HO_Master.py`) on a candidate that holds up.
 
 The figure is saved to `figures/<system>/<params>/quick_scan/quick_<mode>_res<N>.png`, with `_beta<min>_to_<max>` appended for a zoom window, so a quick scan never overwrites the pipeline's figures.
@@ -217,7 +226,9 @@ All path components use only `[A-Za-z0-9_-]` (`-` → `m`, `.` → `p`), so the 
 3. Set `BETA_MAX` (the cold end) for the new energy scale, and `NUM_STATES` as a starting guess. Leave `BETA_MIN = None` and the ξ settings at their defaults; the auto-tune loop adjusts them.
 4. Optionally set `SCAN_PARAM`/`SCAN_STEP`/`SCAN_COUNT` for Section 7.
 5. Check the candidate first with the quick scan (`python Quick_Scan.py` from `src/`; see "Quick Initial Scan").
-6. Run `python src/Quantum_HO_Master.py`. Use the Anaconda Python 3.7 environment for both scripts, since the pipeline relies on matplotlib < 3.9.
+6. Run `python src/Quantum_HO_Master.py`.
+
+**Tested environments:** the full pipeline under Anaconda Python 3.7 (numpy 1.18, matplotlib 3.1); the quick scan under both that and Python 3.12 (numpy 2.4, matplotlib 3.10.9). The figures need a matplotlib that still provides `matplotlib.cm.get_cmap` (used by `Cv_Coefficient_Sweep.py`).
 
 ## Acknowledgements
 

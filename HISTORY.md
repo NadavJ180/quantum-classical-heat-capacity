@@ -137,7 +137,18 @@ A first validation pass also exposed two problems, both fixed before the pass wa
 - a margin of 1 in the verdict was too thin (see above);
 - the validation script's interpolation assumed ascending temperatures.
 
-**Profiling, and an optimization left for approval.** At resolution 1 about half of the run time is not diagonalization. It is the WKB sizing of each solve in `ScaledSpectra`: a bisection that re-samples the potential on 40,001-point grids dozens of times per solve. A cheaper sizing would not change the method or its accuracy (it only picks how many levels to solve for, with margins on top), and would make the quick scan roughly twice as fast (and the full pipeline ~1 min faster). It changes the classical-limit engine, however, so it is listed as an open item instead of being applied.
+**Profiling, and an optimization left for approval.** At resolution 1 about half of the run time is not diagonalization. It is the WKB sizing of each solve in `ScaledSpectra`: a bisection that re-samples the potential on 40,001-point grids dozens of times per solve. A cheaper sizing would not change the method or its accuracy (it only picks how many levels to solve for, with margins on top), and would make the quick scan roughly twice as fast (and the full pipeline ~1 min faster). It changes the classical-limit engine, however, so it is listed as an open item instead of being applied. (It was later applied inside the quick scan only; see below.)
+
+**The sizing speed-up, without touching the engine.** The go-ahead came on one condition: the full scan's classical-limit engine had to stay untouched. The speed-up was therefore done in `Quick_Scan.py` alone. The engine receives `RememberedPotential(V)`, which returns a stored copy whenever V is called again on an input it has already seen.
+- **Same results:** bit-identical, checked on the base double well at resolution 1.
+- **Speed:** that run took 10.7 s instead of 26.0 s in the Python 3.12 environment used for daily work (16.6 s instead of 31.6 s under Anaconda 3.7). The six-variant sweep went from 299 s to 117 s at resolution 1, and from 637 s to 277 s at resolution 2.
+- **Engine:** `Classical_Limit_Numerical.py` is unchanged.
+
+**Temperatures too hot for a DVR.** The quick scan was used on b = −10 at T = 10⁴–10⁵ and failed while allocating a 379 GiB matrix. This was not a bug but the method's cost:
+- **The cause.** The quantum $C_v$ at temperature T needs every thermally accessible level, about 5.6×10⁴ of them at T = 10⁵ (ξ = 1), and the DVR uses four grid points per level.
+- **The scales.** This potential's deep well has ħω ≈ 30, but its second region lies about 68,000 higher. Its configuration-space feature therefore sits at $k_BT\sim10^4$, hundreds of level spacings up, where the quantum corrections are of order $(\beta\hbar\omega)^2\sim10^{-5}$.
+- **The fix.** The quick scan now estimates the grid each temperature needs, from the engine's own WKB sizing, before solving. Temperatures beyond `QUICK_SCAN_MAX_GRID` (6,000 points) are skipped, and the hottest feasible temperature is printed: T ≈ 1,170 for b = −10 at resolution 1. A window that is too hot everywhere stops immediately with that explanation.
+- **The validation** now pins its own potential and temperature window, so local experiments in `config.py` cannot change what it checks.
 
 ## Version History
 
@@ -169,3 +180,4 @@ Pre-reorganization filenames carried explicit version suffixes (e.g. `DVR_Algori
 | `Cv_Coefficient_Sweep` | 1.1 | Each variant drawn against its own classical limit (quantum solid, classical dashed, same color) |
 | `Cv_Coefficient_Sweep` | 1.2 | `plot_coefficient_sweep` takes an optional title and save location (`title`, `category`, `name`) and returns the figure path, so the quick scan can reuse it |
 | `Quick_Scan` | 1.0 | New: quick, low-resolution quantum vs. classical $C_v(T)$ for one potential or a coefficient sweep, with a resolved/unresolved verdict; reuses the pipeline's functions |
+| `Quick_Scan` | 1.1 | `RememberedPotential` (bit-identical, ~2.5× faster, engine untouched); temperatures too hot for a DVR skipped, with the hottest feasible one reported (`QUICK_SCAN_MAX_GRID`) |
