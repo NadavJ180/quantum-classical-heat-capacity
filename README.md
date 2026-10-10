@@ -15,6 +15,7 @@ A modular, system-agnostic numerical pipeline for the heat capacity $C_v(T)$ of 
 Other documents:
 - [`FINDINGS.md`](FINDINGS.md): the physics behind each step, how to read the diagnostic plots, and current results.
 - [`HISTORY.md`](HISTORY.md): how the pipeline got here, including the classical-limit correction.
+- [`CHANGES_SUMMARY.md`](CHANGES_SUMMARY.md): a short list of every change since the classical-limit scaling error, each with where it is in the code and the physical principle behind it.
 - [`audit/classical_limit/`](audit/classical_limit/): the audit, the change log and the verification scripts for that correction. [`CHANGES.md`](audit/classical_limit/CHANGES.md) there is the file-by-file change log of the whole branch, including the Section 6 grid and the quick scan.
 - [`audit/quick_scan/`](audit/quick_scan/): the quick scan's validation against the full pipeline and the exact classical $C_v$, and the numerical check of the high-temperature merge (Wigner–Kirkwood).
 - [`docs/summaries/IEEE_Summary.tex`](docs/summaries/IEEE_Summary.tex) (the project report) and [`docs/summaries/Meetings_Summary.tex`](docs/summaries/Meetings_Summary.tex) (meeting notes and derivations). The report still describes the classical-limit method as it was before the correction.
