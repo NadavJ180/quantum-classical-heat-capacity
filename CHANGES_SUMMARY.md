@@ -39,6 +39,12 @@ A short, physics-first list of every change made on branch `correct-classical` a
   - The ½ is the kinetic energy's share: the momentum integral is Gaussian (equipartition).
   - A variance is never negative, so the classical Cv can never be below ½.
 - **What it fixes:** it rejects the frozen-out "plateau" at Cv ≈ 0 at low T.
+- **OPEN: still to be verified and proven.** This guard is the one place where the pipeline relies on classical theory (Cv_cl ≥ ½, section F) rather than on the ξ-scan alone. It is marked with a comment in the code. Either prove that keeping it is safe here, or replace it with a criterion that uses only the ξ-scan. The options proposed (not implemented):
+  1. **A relative stability test, |ΔCv|/(m² − 1) < tol·|Cv|.** In the frozen regime Cv grows exponentially from rung to rung, so its relative change is huge and the step is rejected. `TOL_XI` would become a relative tolerance.
+  2. **A check that successive changes shrink by about 1/m² per step:** the ħ² law, which the error estimate A4 already assumes. In the frozen regime the changes grow instead, so the step is rejected. Needs a small floor against round-off. *(Recommended, possibly combined with 1.)*
+  3. **A minimum number of thermally populated levels,** N_eff = 1/Σp_n² ≫ 1 (correspondence principle). Adds a threshold knob, and needs care with tunnelling doublets.
+
+  Whichever is chosen, the engine verification against the exact Cv (HO, x⁴, double well) and the quick-scan validation should be re-run to show that nothing else changes.
 
 **A6. Report the last plateau point, and NaN when no plateau is reached.** *Numerics only.*
 - **Where:** [lines 403](src/Classical_Limit_Numerical.py#L403) and [589](src/Classical_Limit_Numerical.py#L589).
@@ -103,6 +109,105 @@ A short, physics-first list of every change made on branch `correct-classical` a
   - the exact classical Cv, ½ + β²·Var(V) by numerical integration (option A, used only as a check);
   - the Pöschl–Teller potential, whose spectrum is exactly known, as a test that needs no DVR.
 
+## F. The exact classical Cv, ½ + β²·Var(V): NOT used by the pipeline
+
+**Status.** No code in `src/` computes this formula. The pipeline's classical curve always comes from the ξ-scan, i.e. from DVR spectra of ξ²V. The pipeline does rely on **one consequence** of it: the plateau test of A5 accepts a ξ step only if Cv ≥ ½ − tol (Step 5 below). That reliance is an open item, still to be verified and proven (see A5). The formula appears in `src/` only in two docstrings, which state it to justify that rule:
+- [`src/Classical_Limit_Numerical.py`](src/Classical_Limit_Numerical.py#L62), line 62;
+- [`src/Cv_Numerical_Benchmark.py`](src/Cv_Numerical_Benchmark.py#L292), line 292.
+
+It is computed (by numerical integration) only in [`audit/`](audit/), as an independent check of the ξ-scan. Using it in the pipeline itself is "option A", which is still undecided.
+
+### Part 1: Deriving Cv_cl = ½ + β²·Var(V)
+
+**Setup.** One particle in 1-D, H = p²/2m + V(x), in contact with a bath at temperature T (canonical ensemble), with β = 1/(k_B T).
+
+**Step 1: the classical partition function.**
+
+  Z_cl = (1/2πħ) ∫∫ e^(−βH(x,p)) dx dp
+
+The 1/2πħ counts one quantum state per phase-space area 2πħ (Step 7 shows where it comes from). It is a constant, and Step 4 shows it drops out.
+
+**Step 2: it factorizes.** Because e^(−β(p²/2m + V)) = e^(−βp²/2m)·e^(−βV(x)), the two integrals separate:
+
+  Z_cl = (1/2πħ) · [∫ e^(−βp²/2m) dp] · [∫ e^(−βV(x)) dx]
+
+The p-integral is a Gaussian: ∫ e^(−βp²/2m) dp = √(2πm/β). Call the x-integral Q(β) = ∫ e^(−βV(x)) dx. Then
+
+  Z_cl = (1/2πħ)·√(2πm)·β^(−1/2)·Q(β),  ln Z_cl = const − ½ ln β + ln Q(β)
+
+**Step 3: the mean energy.** U = −∂(ln Z)/∂β. The constant drops out, −½ ln β gives 1/(2β), and
+
+  −Q′/Q = ∫ V e^(−βV) dx / ∫ e^(−βV) dx = ⟨V⟩,
+
+the average of V weighted by e^(−βV). So
+
+  U = 1/(2β) + ⟨V⟩ = ½ k_B T + ⟨V⟩
+
+The ½ k_B T is the kinetic energy (equipartition).
+
+**Step 4: the heat capacity.** Cv = dU/dT, and since dβ/dT = −k_B β², we have Cv = −k_B β²·dU/dβ.
+- The kinetic term: d/dβ [1/(2β)] = −1/(2β²).
+- The potential term, differentiating the ratio:
+
+  d⟨V⟩/dβ = −∫V² e^(−βV)/Q + (∫V e^(−βV)/Q)² = −(⟨V²⟩ − ⟨V⟩²) = −Var(V)
+
+Putting them together:
+
+  **Cv_cl/k_B = −β²·[−1/(2β²) − Var(V)] = ½ + β²·Var(V)**
+
+No ħ is left: the 1/2πħ was a constant inside ln Z, and U and Cv only involve β-derivatives of ln Z.
+
+**Step 5: consequences and checks.**
+- **The bound:** a variance is never negative, so Cv_cl ≥ ½. This is the rule the ξ-scan uses (A5).
+- **HO**, V = ½mω²x²: Q ∝ β^(−1/2), so ⟨V⟩ = 1/(2β) and Var(V) = 1/(2β²). Then Cv = ½ + ½ = 1, the equipartition value.
+- **|x|^k** in general: Q ∝ β^(−1/k), so Var(V) = 1/(kβ²) and Cv = ½ + 1/k. That gives ¾ for x⁴, and ½ for the box (k → ∞, where V = 0 inside and Var = 0).
+- **A handy identity:** Var(V) = ∂²(ln Q)/∂β². This is the "fluctuations = second derivative of ln Z" rule, applied to the x-part only.
+
+### Part 2: Why this is the classical limit of the quantum Cv
+
+**Step 6: the quantum partition function.**
+
+  Z_q = Σ_n e^(−βE_n) = Tr e^(−βĤ) = ∫ dx ⟨x|e^(−βĤ)|x⟩
+
+The pipeline's quantum Cv (k_B β²·Var(E)) comes from this Z_q.
+
+**Step 7: ignore, for a moment, that x̂ and p̂ don't commute.** If e^(−β(T̂+V̂)) were equal to e^(−βV(x̂))·e^(−βp̂²/2m), then by inserting momentum states ⟨x|p⟩ = e^(ipx/ħ)/√(2πħ):
+
+  ⟨x|e^(−βV)e^(−βp²/2m)|x⟩ = e^(−βV(x)) ∫ dp |⟨x|p⟩|² e^(−βp²/2m) = e^(−βV(x)) · (1/2πħ) ∫ dp e^(−βp²/2m)
+
+Integrating over x gives exactly Z_cl from Step 1. This is where the 1/2πħ comes from: |⟨x|p⟩|² = 1/2πħ.
+
+**Step 8: the error from that assumption vanishes as ħ → 0.** e^(−β(T̂+V̂)) and e^(−βV̂)e^(−βT̂) differ by terms built from the commutator [T̂, V̂], which is proportional to ħ (from [x̂, p̂] = iħ). Worked out properly (Wigner 1932, Kirkwood 1933), the result is
+
+  Z_q = Z_cl·[1 − (ħ²β²/24m)·⟨V″⟩ + O(ħ⁴)]
+
+So Z_q → Z_cl as ħ → 0, and with it Cv_q → Cv_cl. Physically, the correction is small when the thermal de Broglie wavelength ħ√(β/m) is small compared with the distance over which V changes. Equivalently, k_BT is much larger than the level spacing ħω.
+
+**Step 9: the link to the ξ-scan.** By Eq. S7, the ξ-scan computes the quantum Cv of the same V at the same T, but with ħ/ξ. As ξ → ∞ that is ħ → 0, so by Step 8 the scan converges to ½ + β²·Var(V). The Wigner–Kirkwood term also shows that the remaining gap shrinks as ħ², i.e. as 1/ξ², which is the law behind the error estimate ε (A4).
+
+**Conditions this needs (all true in this problem):**
+- a single distinguishable particle (no Bose/Fermi statistics);
+- a Hamiltonian of the form p²/2m + V(x), with the kinetic term a pure p², so the p-integral is Gaussian;
+- the canonical ensemble;
+- a confining V, so that Q(β) is finite;
+- a smooth V. Hard walls change the correction to O(ħ) but not the limit.
+
+**Numerical confirmation:**
+- The ξ-scan converges to this formula for the HO, x⁴ and the double well, within 8.2·10⁻⁴ ([`audit/classical_limit/VERIFY_CORRECTED.txt`](audit/classical_limit/VERIFY_CORRECTED.txt)).
+- The Wigner–Kirkwood term of Step 8 matches the DVR's Cv_q − Cv_cl to a ratio of 0.998–1.000 at high T ([`audit/quick_scan/MERGE_CHECK.txt`](audit/quick_scan/MERGE_CHECK.txt)).
+
+**References for section F:**
+- Steps 1–5:
+  - Schroeder, *An Introduction to Thermal Physics*, ch. 6 (partition function, equipartition);
+  - Pathria & Beale, *Statistical Mechanics*, ch. 3 (classical canonical ensemble, energy fluctuations);
+  - [`audit/classical_limit/OPTION_A_physics.md`](audit/classical_limit/OPTION_A_physics.md).
+- Steps 6–8:
+  - Feynman, *Statistical Mechanics: A Set of Lectures*, ch. 2 (the Wigner correction);
+  - Landau & Lifshitz, *Statistical Physics* Part 1, ch. III, "Expansion in powers of ħ";
+  - Pathria & Beale, ch. 5 (density matrix and the classical limit);
+  - E. Wigner, Phys. Rev. 40, 749 (1932); J. G. Kirkwood, Phys. Rev. 44, 31 (1933);
+  - for the non-commuting exponentials: the Baker–Campbell–Hausdorff formula.
+
 ---
 
 ## Further reading
@@ -116,4 +221,5 @@ A short, physics-first list of every change made on branch `correct-classical` a
   - a good undergrad exercise: expand Einstein's oscillator Cv at high T and recover −(βħω)²/12.
 - **The error estimate:** "Richardson extrapolation" in any numerical-analysis text, e.g. Burden & Faires.
 - **The DVR and grid resolution:** Colbert & Miller, J. Chem. Phys. 96, 1982 (1992); the Nyquist sampling theorem.
-- **The exact classical Cv integral:** [`audit/classical_limit/OPTION_A_physics.md`](audit/classical_limit/OPTION_A_physics.md).
+- **The exact classical Cv integral:** section F above (full derivation, not used by the pipeline), and [`audit/classical_limit/OPTION_A_physics.md`](audit/classical_limit/OPTION_A_physics.md).
+- **The quantum → classical limit of the partition function:** Feynman, *Statistical Mechanics: A Set of Lectures*, ch. 2; Pathria & Beale, ch. 5; the Baker–Campbell–Hausdorff formula.

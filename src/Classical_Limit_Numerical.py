@@ -391,6 +391,10 @@ def converge_xi(spectra, beta, xi_ladder, tol_xi, min_stable, xi_mult, ladder_ca
             continue
         err = abs(cv - cvs[-2]) / (xi_mult**2 - 1.0)
         errs.append(err)
+        # OPEN (still to be verified and proven): the "cv >= 0.5 - tol_xi"
+        # guard uses Cv_cl >= 1/2 from classical theory, not from the xi-scan
+        # itself. It may be kept (with a proof that it is safe here) or replaced
+        # by a xi-only criterion; options in CHANGES_SUMMARY.md, section A5.
         stable = np.isfinite(err) and err < tol_xi and cv >= 0.5 - tol_xi
         streak = streak + 1 if stable else 0
         if streak >= min_stable:
