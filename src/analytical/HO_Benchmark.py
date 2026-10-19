@@ -1,20 +1,8 @@
 """
 HO_Benchmark.py
-=====================================================================
-WHAT THIS FILE DOES
----------------------------------------------------------------------
-HO-only benchmark layer: takes the NUMERICAL results already produced
-by Quantum_Classical_Combined.py's `run()` (the true quantum
-Cv(T) curve from DVR energies + the numerically found classical
-limit Cv(T)) and overlays them against the ANALYTICAL Harmonic
-Oscillator solutions from HO_Analytical.py (the exact Einstein
-Cv(T) formula + the exact classical limit, k_B). It then quantifies
-the agreement (absolute/relative error vs temperature) and plots
-everything together. Curves are labelled "numerical" vs "analytical"
-throughout (not "Einstein"/HO-specific names), so the label style
-generalises cleanly to Cv_Numerical_Benchmark.py's own base-vs-reference
-benchmark for systems with no closed-form answer.
-=====================================================================
+The numerical Cv(T) of the harmonic oscillator against the exact results
+(HO_Analytical.py). The full pipeline runs it when config.POTENTIAL is
+potentials.harmonic.
 """
 
 import numpy as np
@@ -24,183 +12,36 @@ from analytical.HO_Analytical import analytic_cv_HO_quantum, analytic_cv_HO_clas
 from figures.output_paths import save_figure
 
 
-# =====================================================================
-# Quantify agreement between numerical and analytic quantum Cv(T)
-# =====================================================================
-def compute_cv_benchmark_error(cv_numeric, cv_analytic):
-    """
-    Compute the absolute and relative error between a numerically
-    computed Cv(T) curve and the exact analytic Cv(T) curve, point
-    by point. NaN entries in `cv_numeric` (e.g. where xi/n
-    convergence failed at that temperature) are preserved as NaN in
-    the output rather than silently dropped, so the error curve lines
-    up 1:1 with the temperature axis.
+def run_ho_benchmark(numeric_results, hbar=1.0, omega=1.0, kB=1.0):
+    """numeric_results: Quantum_Classical_Combined.run output for the harmonic oscillator."""
+    T = numeric_results["T_arr"]
+    cv_q_exact = analytic_cv_HO_quantum(T, hbar, omega, kB)
+    cv_cl_exact = analytic_cv_HO_classical(kB)
+    error_q = np.abs(numeric_results["cv_quantum"] - cv_q_exact)
+    error_cl = np.abs(numeric_results["cv_classical"] - cv_cl_exact)
+    trusted = numeric_results["classical_ok"]
+    print(f"  Harmonic oscillator vs exact: max |Cv_q error| = {np.max(error_q):.2e}")
+    print(f"    max |Cv_cl error| = {np.max(error_cl):.2e} at all T,"
+          f" {np.max(error_cl[trusted]) if trusted.any() else np.nan:.2e} where the classical Cv is trusted")
 
-    Parameters
-    ----------
-    cv_numeric : ndarray
-        Numerically computed Cv(T) (e.g. cv_quantum from `run()`).
-    cv_analytic : ndarray
-        Exact analytic Cv(T) over the same temperature grid.
-
-    Returns
-    -------
-    dict with keys:
-        abs_error, rel_error : ndarray
-            Per-temperature absolute/relative error (NaN preserved).
-        max_abs_error, max_abs_idx : float, int
-            Largest absolute error (ignoring NaNs) and its index.
-        mean_abs_error, mean_rel_error : float
-            NaN-safe mean absolute/relative error.
-    """
-    cv_numeric = np.asarray(cv_numeric, dtype=float)
-    cv_analytic = np.asarray(cv_analytic, dtype=float)
-
-    abs_error = np.abs(cv_numeric - cv_analytic)
-    with np.errstate(divide='ignore', invalid='ignore'):
-        rel_error = abs_error / np.abs(cv_analytic)
-
-    if np.all(np.isnan(abs_error)):
-        max_abs_idx = -1
-        max_abs_error = np.nan
-    else:
-        max_abs_idx = int(np.nanargmax(abs_error))
-        max_abs_error = float(abs_error[max_abs_idx])
-
-    return {
-        "abs_error": abs_error,
-        "rel_error": rel_error,
-        "max_abs_error": max_abs_error,
-        "max_abs_idx": max_abs_idx,
-        "mean_abs_error": float(np.nanmean(abs_error)),
-        "mean_rel_error": float(np.nanmean(rel_error)),
-    }
-
-
-# =====================================================================
-# Benchmark plot: numeric vs analytic Cv(T), classical limits, and error
-# =====================================================================
-def plot_ho_cv_benchmark(T_arr, cv_quantum_numeric, cv_quantum_analytic,
-                          cv_classical_numeric, cv_classical_analytic,
-                          cv_error, T_units_label=r"$k_B T \,/\, \hbar\omega$"):
-    """
-    Two-panel benchmark figure for the Harmonic Oscillator:
-        Top panel: quantum Cv(T) (numeric DVR-based vs exact analytic)
-                   plus the classical-limit Cv (numeric vs exact k_B),
-                   all on one set of axes.
-        Bottom panel: the absolute error between numeric and analytic
-                   quantum Cv(T), on a log y-axis so both the
-                   low-T and high-T error behavior are visible.
-
-    Parameters
-    ----------
-    T_arr : ndarray
-        Temperature axis (shared by all curves).
-    cv_quantum_numeric : ndarray
-        Quantum Cv(T) computed numerically from DVR energies.
-    cv_quantum_analytic : ndarray
-        Exact analytic quantum Cv(T) (Einstein oscillator formula).
-    cv_classical_numeric : ndarray
-        Numerically found classical-limit Cv(T) (xi/n convergence).
-    cv_classical_analytic : float
-        Exact analytic classical limit (k_B for a 1-D HO).
-    cv_error : dict
-        Output of `compute_cv_benchmark_error`.
-    T_units_label : str, optional
-        X-axis label (LaTeX-formatted).
-
-    Returns
-    -------
-    None (saves the figure to disk under figures/<system>/<params>/<category>/; see figures/output_paths.py).
-    """
-    BLUE, ORANGE, GREEN, PURPLE = "#1f77b4", "#d62728", "#2ca02c", "#9467bd"
-
-    fig, (ax_top, ax_bot) = plt.subplots(2, 1, figsize=(9, 8), sharex=True,
-                                          gridspec_kw={"height_ratios": [2.2, 1]})
-    fig.suptitle("Harmonic Oscillator \u2014 Numerical vs Analytical Benchmark", fontsize=13, fontweight="bold")
-
-    # --- Top panel: the four Cv curves together ---
-    ax_top.plot(T_arr, cv_quantum_numeric, color=BLUE, linewidth=2, label="Quantum Cv(T) \u2014 numerical (DVR)")
-    ax_top.plot(T_arr, cv_quantum_analytic, color=ORANGE, linewidth=1.6, linestyle="--", label="Quantum Cv(T) \u2014 analytical")
-    ax_top.plot(T_arr, cv_classical_numeric, color=GREEN, linewidth=1.8, linestyle="-.", label="Classical limit \u2014 numerical")
-    ax_top.axhline(cv_classical_analytic, color=PURPLE, linewidth=1.5, linestyle=":", label=f"Classical limit \u2014 analytical ($k_B$ = {cv_classical_analytic:.3g})")
-    ax_top.set_ylabel(r"$C_v \,/\, k_B$", fontsize=12)
-    ax_top.set_xscale("log")
-    ax_top.legend(fontsize=9, loc="upper left")
-    ax_top.grid(True, linestyle="--", alpha=0.4)
-
-    # --- Bottom panel: the actual quantum-Cv error curve ---
-    ax_bot.plot(T_arr, cv_error["abs_error"], color=BLUE, linewidth=1.5)
-    if cv_error["max_abs_idx"] >= 0:
-        ax_bot.scatter([T_arr[cv_error["max_abs_idx"]]], [cv_error["max_abs_error"]],
-                        color=ORANGE, zorder=5, s=60,
-                        label=f"Max error = {cv_error['max_abs_error']:.2e}")
-        ax_bot.legend(fontsize=9, loc="upper right")
-    ax_bot.set_xlabel(T_units_label, fontsize=12)
-    ax_bot.set_ylabel(r"$|Cv_{num} - Cv_{analytic}|$", fontsize=11)
-    ax_bot.set_yscale("log")
-    ax_bot.grid(True, linestyle="--", alpha=0.4)
-
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(9, 8), sharex=True,
+                                   gridspec_kw={"height_ratios": [2.2, 1]})
+    fig.suptitle("Harmonic oscillator: numerical vs exact", fontsize=13, fontweight="bold")
+    ax1.plot(T, numeric_results["cv_quantum"], color="#1f77b4", lw=2, label="quantum, DVR")
+    ax1.plot(T, cv_q_exact, color="#d62728", lw=1.5, ls="--", label="quantum, Einstein formula")
+    ax1.plot(T, numeric_results["cv_classical"], color="#2ca02c", lw=1.8, ls="-.", label="classical, hbar/xi")
+    ax1.axhline(cv_cl_exact, color="#9467bd", ls=":", label="classical, exact ($k_B$)")
+    ax1.set_ylabel(r"$C_v / k_B$")
+    ax1.legend(fontsize=9)
+    ax2.plot(T, np.where(error_q > 0, error_q, np.nan), color="#1f77b4", label="quantum")
+    ax2.plot(T, np.where(error_cl > 0, error_cl, np.nan), color="#2ca02c", label="classical")
+    ax2.set_yscale("log")
+    ax2.set_ylabel("|numerical - exact|")
+    ax2.set_xlabel(r"$k_B T / \hbar\omega$")
+    ax2.legend(fontsize=9)
+    for ax in (ax1, ax2):
+        ax.set_xscale("log")
+        ax.grid(True, ls="--", alpha=0.4)
     plt.tight_layout()
     save_figure(fig, "cv", "analytic_cv_benchmark")
-
-
-# =====================================================================
-# Orchestrator: build the analytic curves and run the full benchmark
-# =====================================================================
-def run_ho_benchmark(numeric_results, hbar=1.0, omega=1.0, kB=1.0):
-    """
-    Take the dict returned by Quantum_Classical_Combined.run()
-    for the HO system, compute the matching analytic quantum Cv(T)
-    curve and analytic classical limit over the same temperature
-    grid, quantify the numeric-vs-analytic agreement, print a short
-    summary, and produce the benchmark figure.
-
-    Parameters
-    ----------
-    numeric_results : dict
-        The dict returned by `Quantum_Classical_Combined.run()`
-        when called on HO energy levels. Must contain "T_arr",
-        "cv_quantum", and "cv_classical".
-    hbar, omega, kB : float, optional
-        Physical constants defining the HO system (default 1.0 each,
-        matching the dimensionless units used throughout this project).
-
-    Returns
-    -------
-    dict with keys:
-        T_arr : ndarray
-        cv_quantum_numeric, cv_quantum_analytic : ndarray
-        cv_classical_numeric : ndarray
-        cv_classical_analytic : float
-        cv_error : dict
-            Output of `compute_cv_benchmark_error`.
-    """
-    T_arr = numeric_results["T_arr"]
-    cv_quantum_numeric = numeric_results["cv_quantum"]
-    cv_classical_numeric = numeric_results["cv_classical"]
-
-    cv_quantum_analytic = analytic_cv_HO_quantum(T_arr, hbar=hbar, omega=omega, kB=kB)
-    cv_classical_analytic = analytic_cv_HO_classical(kB=kB)
-
-    cv_error = compute_cv_benchmark_error(cv_quantum_numeric, cv_quantum_analytic)
-
-    print(f"\n{'-'*60}")
-    print("  Harmonic Oscillator: numerical vs analytical Cv(T) benchmark")
-    print(f"{'-'*60}")
-    print(f"  Mean |Cv error|:   {cv_error['mean_abs_error']:.3e}")
-    print(f"  Max  |Cv error|:   {cv_error['max_abs_error']:.3e}  (at T = {T_arr[cv_error['max_abs_idx']]:.3g})" if cv_error['max_abs_idx'] >= 0 else "  Max  |Cv error|:   n/a (all NaN)")
-    print(f"  Mean relative error: {cv_error['mean_rel_error']:.3e}")
-    print(f"{'-'*60}\n")
-
-    plot_ho_cv_benchmark(T_arr, cv_quantum_numeric, cv_quantum_analytic,
-                          cv_classical_numeric, cv_classical_analytic, cv_error)
-
-    return {
-        "T_arr": T_arr,
-        "cv_quantum_numeric": cv_quantum_numeric,
-        "cv_quantum_analytic": cv_quantum_analytic,
-        "cv_classical_numeric": cv_classical_numeric,
-        "cv_classical_analytic": cv_classical_analytic,
-        "cv_error": cv_error,
-    }
+    return {"error_quantum": error_q, "error_classical": error_cl}

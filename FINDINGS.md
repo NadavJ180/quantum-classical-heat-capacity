@@ -1,6 +1,8 @@
 # Findings
 
-Technical summary of the physics behind this pipeline, how to read its diagnostic output, and the results so far. For the full write-up see [`docs/summaries/IEEE_Summary.tex`](docs/summaries/IEEE_Summary.tex); note that its classical-limit section still describes the pre-correction method (see [`HISTORY.md`](HISTORY.md)).
+Technical summary of the physics behind this pipeline and the results so far.
+
+> **Branch `simple-dvr`:** the code was simplified (see [`CODE_GUIDE.md`](CODE_GUIDE.md)). The physics below still holds. The parts that describe the old engine (the ξ ladder with its plateau search, the auto-tune loop, the quick-scan resolutions and $T_{	ext{merge}}$) are kept as the record of how the results in "Findings So Far" were obtained; the current code uses a list of ξ values that you choose and only reports where results can be trusted. For the full write-up see [`docs/summaries/IEEE_Summary.tex`](docs/summaries/IEEE_Summary.tex); note that its classical-limit section still describes the pre-correction method (see [`HISTORY.md`](HISTORY.md)).
 
 ## Physics Background
 
@@ -20,7 +22,7 @@ $$T_{ij} = \frac{\hbar^2}{2m\,\Delta x^2}\times\begin{cases}\dfrac{\pi^2}{3}, & 
 
 The potential energy is diagonal, $V_{ij}=V(x_i)\,\delta_{ij}$. $T_{ij}$ depends only on $|i-j|$ (a Toeplitz matrix), so it is built from a single row. The Hamiltonian is diagonalized with `scipy.linalg.eigvalsh` (`subset_by_index`), which extracts only the lowest $N_{\text{lev}}$ eigenvalues.
 
-- **Scope:** $V(x)$ must be finite everywhere on the grid. Hard walls are not supported: a discontinuity has unbounded momentum content that no finite grid can resolve.
+- **Scope:** $V(x)$ must be finite everywhere on the grid. Hard walls are handled separately, by the Colbert–Miller formula for a finite interval with the walls at the grid ends (`box_dvr_1d`, `WALLS = True`; [`CODE_GUIDE.md`](CODE_GUIDE.md) section 2.2), not by putting an infinite value into $V$.
 - **Grid limitations:** only roughly the lower half of a requested spectrum is trustworthy, and the dense diagonalization costs $\mathcal{O}(N^2)$ memory and $\mathcal{O}(N^3)$ time.
 
 ### The Classical Limit
@@ -205,70 +207,6 @@ At lower T the ratio drops (0.85–0.95 at the coldest temperatures checked), as
   - **The error estimate is honest at low resolution too.** The coarse classical value always sits below the limit, by about its own estimate.
   - **Resolution 3 is the full pipeline.** Its classical curve is identical to the full run's to 4e-12.
 
-## Reading the Diagnostic Plots
+## Reading the Plots, Settings and Troubleshooting
 
-| Plot | What to look for |
-|---|---|
-| **Energy-level comparison** (base vs. reference, full range + zoom near largest error) | Curves visually indistinguishable at full scale; the zoom panel shows the worst-case disagreement in context. |
-| **Relative error vs. state index $n$** | A smooth, gently rising curve. Low-lying states are most accurate, the highest least. An abrupt spike at some $n^*$ flags where grid resolution first becomes insufficient. |
-| **ξ-convergence diagnostic** (the hardest temperature) | $C_v(\xi)$ on a log-ξ axis. At low T: ≈0 for small ξ (frozen out; grey, not accepted), then a rise, then the **verified plateau** (green), whose last point is reported with its estimated distance to the limit. Yellow points passed the per-step test but did not complete a plateau. There is no collapse: each ξ's spectrum covers its temperature. |
-| **n-convergence diagnostic** | Run on the converged ξ's spectrum. Near-zero at low $n$, a smooth rise, a flat tail. The converged point should sit well before the right edge. |
-| **$C_v(T)$ summary** (quantum + classical limit + $\xi_{\text{conv}}(T)$/$n_{\text{conv}}(T)$) | The classical curve is the ħ → 0 heat capacity at each T and can exceed $k_B$. The quantum curve rises from 0 and joins it at high T. $\xi_{\text{conv}}$ grows roughly like 1/T: colder temperatures need a smaller effective ħ. |
-| **DVR resolution/level-count limit plots** | A long machine-precision floor, then an abrupt cliff once Δx (or the requested n) crosses the solver's breakdown point. |
-| **Cv benchmark plots** (base vs. reference) | Flat, featureless error well below the tolerances. Quantum: the reference spectrum. Classical: the same ξ-scan with every ξ²V solve on refined grids. This shows grid convergence; it is not an independent test of the method. |
-| **Coefficient sweep — Cv** (`coefficient_sweep/cv_coefficient_sweep.png`) | One color per variant: quantum $C_v$ solid, **its own** classical limit dashed. A quantum excess means the solid line above the dashed line *of the same color*. A † marks a variant whose classical scan failed at some temperatures (gaps); a `*` marks marginal hot-end coverage of the quantum curve. Mirror-image coefficient values (±b) give identical curves. A non-confining variant is simply absent (see console). |
-| **Coefficient sweep — potentials** (`potential_comparison.png` or `potential_<param>_<value>.png`) | Each variant's $V(x)$ with its low-lying spectrum, colored to match the Cv plot. Use it to connect changes in the Cv curves to changes in well depth, barrier and asymmetry. |
-| **Quick scan** (`quick_scan/quick_<mode>_res<N>.png`) | Same layout as the coefficient-sweep Cv plot, at the quick scan's resolution (in the title). Read it together with the console verdict: a solid line above its dashed line counts only where the verdict calls it resolved. |
-
-## Key Parameters (`src/config.py`)
-
-| Parameter | Effect |
-|-----------|--------|
-| `NUM_STATES` | Levels of the base spectrum, used for the **quantum** curve only. A starting guess; grown automatically if the top level is thermally accessible at the hottest T. |
-| `BETA_MIN` / `BETA_MAX` / `N_BETA` | Temperature window and point count. `BETA_MIN = None` derives the hot end from $T_{\max}=10(E_1-E_0)/k_B$. `beta_arr` is log-spaced; raise `N_BETA` if a curve looks polygonal. Colder `BETA_MAX` means a longer ξ ladder (ξ grows roughly like 1/T). |
-| `XI_START`, `XI_MULT`, `MAX_XI_STEPS` | The ξ ladder `XI_START`·`XI_MULT`^k, k < `MAX_XI_STEPS`. Every rung is a DVR solve of ξ²V. The defaults are 1, 1.25 and 35, reaching ξ ≈ 1,970. |
-| `XI_MAX` | Hard cap on ξ (default 2000). It is never raised automatically, because grid sizes grow with ξ. |
-| `TOL_XI`, `MIN_STABLE_XI` | Plateau criterion. `TOL_XI` bounds the estimated distance of the reported value from the ξ → ∞ limit (default 2e-3; observed errors ≈ 8e-4). `MIN_STABLE_XI` = 3 consecutive stable steps. |
-| `TOL_CV`, `MIN_STABLE_N` | n-scan stability tolerance and run length. |
-| `HOT_STATE_SAFETY` | Thermal coverage: base spectrum $E_{\max}\ge$ safety·$k_BT_{\text{hot}}$, and every ξ²V solve keeps levels up to $E_0+$ safety·$k_BT$. Default 20, so the top level weighs ~e⁻²⁰. |
-| `LIMIT_TOLERANCE` | Pass/fail threshold of the DVR limit searches (Section 5). |
-| `REFERENCE_SPAN_FACTOR` / `REFERENCE_DX_FACTOR` | How much wider/finer the reference grid is (Section 2), used by Sections 3 and 5 and by Section 6's quantum benchmark. Default 2.0/2.0. |
-| `CLASSICAL_REFERENCE_SPAN_FACTOR` / `CLASSICAL_REFERENCE_DX_FACTOR` | Grid widening/refinement of every ξ²V solve in Section 6's classical reference. Default 1.5/1.5. |
-| `CLASSICAL_REFERENCE_PRECISE` | `True` gives Section 6's classical reference Section 2's own factors (2/2): a stricter grid test at ~3.7× the cost. Default `False`. |
-| `AUTO_ESCALATE`, `MAX_ESCALATION_ROUNDS`, `NUM_STATES_GROWTH`, `NUM_STATES_CAP`, `XI_START_GROWTH`, `MAX_XI_STEPS_GROWTH`, `ESCALATION_FRACTION_THRESHOLD` | Control the auto-tune loop (see README). Meant to be touched rarely. |
-| `SCAN_PARAM`, `SCAN_STEP`, `SCAN_COUNT`, `SCAN_SYMMETRIC_VALUE` | Section 7: which coefficient is swept, its spacing, the extra variants per side, and an optional symmetric reference value. The quick scan's `"sweep"` mode uses the same four. |
-| `QUICK_SCAN_MODE`, `QUICK_SCAN_RESOLUTION`, `QUICK_SCAN_BETA_RANGE` | `Quick_Scan.py`: one potential (`"single"`) or the Section 7 sweep (`"sweep"`); which preset; an optional (β_min, β_max) zoom window (`None` = `BETA_MIN`/`BETA_MAX`). |
-| `QUICK_SCAN_PRESETS` | Per resolution: `n_beta`, `tol_xi`, `xi_mult`, `min_stable_xi`, `thermal_coverage` and `dvr_tolerance`, with the same meanings as the pipeline's `N_BETA`, `TOL_XI`, `XI_MULT`, `MIN_STABLE_XI` and `HOT_STATE_SAFETY`, and the DVR's 3-pass tolerance. The ladder always runs from `XI_START` up to `XI_MAX`. Resolution 3 is the full pipeline's own settings. |
-
-**Section 6 reference factors.** With 2/2, Section 6's classical reference sweep took ~36 min for the double well. Lighter factors agree with the base curve equally well, all at round-off. The default is therefore 1.5/1.5, with 2/2 kept as the `CLASSICAL_REFERENCE_PRECISE` option:
-
-| factor (span / dx) | time | max relative difference |
-|---|---|---|
-| 2 / 2 | 36 min | 5.5e-12 |
-| 1.5 / 1.5 | 9.8 min | 5.4e-12 |
-| 1.25 / 1.25 | 5.7 min | 6.9e-12 |
-
-See [`audit/classical_limit/SECTION6_GRID_FACTORS.txt`](audit/classical_limit/SECTION6_GRID_FACTORS.txt) and `figures/section6_grid_factors.png` there.
-
-- **Why 1.5/1.5 is still a real test.** It changes both the span and the spacing of every ξ²V solve by 50%. DVR errors fall off exponentially with resolution and span, so a base solve that is too narrow or too coarse would still show up as a visible difference.
-- **When to use the precise option.** When the Section 6 classical error panel is not at round-off level, or when a new potential's grid is in doubt: 2/2 perturbs the grid more strongly.
-- **The quantum benchmark is unaffected.** It reuses Section 2's 2/2 spectrum, which costs under a minute.
-
-## Troubleshooting
-
-The auto-tune loop handles the two common cases automatically (README, "Auto-Tuning"). The manual remedies below still apply if escalation is disabled, if it runs out of rounds (a `UserWarning` is printed), or for Section 6 and Section 7, which reuse the base run's final settings.
-
-- **Classical limit is NaN at some temperatures.** The console reports the stop reason per temperature:
-  - `max_steps` (the ladder ran out; auto-escalated): raise `MAX_XI_STEPS`, or `XI_START`, which shifts the ladder up.
-  - `xi_cap` (the ladder hit `XI_MAX`, typically at very cold T): raise `XI_MAX` deliberately, or use a smaller `BETA_MAX` (a warmer cold end). Cost and memory grow with ξ; the largest grid is printed after each sweep.
-  - `dvr_failed`: a scaled solve failed its convergence check. The potential may be non-confining or pathological in that range.
-- **Quantum $C_v$ falls off at the hottest temperatures, or the Cv benchmark error rises there.** The base spectrum is truncating thermally accessible levels. Increase `NUM_STATES` (auto-escalated when $E_{\max}<$ `HOT_STATE_SAFETY`·$k_BT_{\text{hot}}$).
-- **Quantum $C_v$ cuts off abruptly at the edge of the window.** Extend the temperature range in that direction.
-- **Cv benchmark error rises at low T.** The lowest eigenvalues are inaccurate; check the base grid's resolution or span.
-- **Relative-error metrics blow up at very low T.** For the quantum curve, numerator and denominator both underflow; use the absolute error. The classical curve never approaches zero (≥ ½).
-- **A curve looks like straight segments rather than smooth.** Too few temperatures in that stretch; increase `N_BETA`.
-- **A long run seems stuck at the cold end.** The largest-ξ solves are the most expensive (several seconds each in Sections 1 & 4, and longer on Section 6's refined grids). The progress bar's rate slows there, which is expected.
-- **Section 6's classical error panel is not at round-off level.** Re-run it with `CLASSICAL_REFERENCE_PRECISE = True` to see whether the difference persists on the stricter 2/2 grid. If it does, the base grid of the scaled solves is not converged.
-- **Quick scan verdict "unresolved" outside the hot tail.** The difference between the curves there is within the classical value's error at this resolution. Raise `QUICK_SCAN_RESOLUTION`, or zoom with `QUICK_SCAN_BETA_RANGE` onto that window (cheaper without the cold end) and raise it there.
-- **Quick scan skips the hottest temperatures, or says "merged".** Those temperatures lie above the potential's $T_{\text{merge}}$, where the quantum and classical $C_v$ agree within `tol_xi` and would need many more levels; nothing is lost. To see the curves there anyway, use a finer resolution (a smaller `tol_xi` puts $T_{\text{merge}}$ higher), knowing that the level count grows with T.
-- **Quick scan classical curve has gaps (†).** The ladder hit `XI_MAX` (`xi_cap`) or a solve failed. Narrow the window to warmer temperatures, or raise `XI_MAX` deliberately.
+These now live in [`CODE_GUIDE.md`](CODE_GUIDE.md): section 5 (quick-scan figure), section 6 (full-pipeline figures), section 3 (every setting in `config.py`) and section 8 (what to change when the trust report flags a temperature range).

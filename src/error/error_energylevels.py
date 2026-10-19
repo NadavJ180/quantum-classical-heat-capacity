@@ -1,22 +1,9 @@
 """
 error_energylevels.py
-=====================================================================
-WHAT THIS FILE DOES
----------------------------------------------------------------------
-Accuracy check for the smooth-potential DVR solver: compares any two
-energy spectra of the same length, level by level, and reports/plots
-how the error grows with the state index n. Despite the module's
-HO-flavored function names (a holdover from when this file's only
-use case was DVR vs. the harmonic oscillator's exact formula),
-nothing here is HO-specific -- it only ever compares two plain arrays.
-
-In the current pipeline (Quantum_HO_Master.py, Section 3) the second
-array is always a finer numerical reference spectrum (from
-DVR_Reference_Generator.py), not an analytic one; DVR_Limit_Finder.py
-also reuses `compute_energy_level_errors` directly for its own
-resolution/level-count breakdown searches. This is the tool you reach
-for whenever you want to know "how accurate is my DVR grid, really?"
-=====================================================================
+Compares two spectra level by level (base DVR vs reference DVR).
+The error is an ENERGY difference |E_n - E_n,ref|: Boltzmann factors depend on
+(E_n - E_0) / k_B T, so an energy error matters compared with k_B T, not with E_n
+itself (E_n can be negative or zero, e.g. in a double well).
 """
 
 import numpy as np
@@ -25,227 +12,40 @@ import matplotlib.pyplot as plt
 from figures.output_paths import save_figure
 
 
-# =====================================================================
-# Compute absolute/relative error between numerical and analytic levels
-# =====================================================================
-def compute_energy_level_errors(E_numeric, E_analytic):
-    """
-    Compute level-by-level absolute and relative error between a
-    numerically computed energy spectrum and a ground-truth spectrum
-    it should match, plus a few summary statistics.
-
-    NOTE ON GENERALITY: nothing in this function is HO-specific -- it
-    only ever compares two plain arrays of the same length. `E_analytic`
-    is named for this function's original use case (an exact closed-form
-    spectrum), but in the current pipeline it is always a finer
-    numerical reference solution instead -- systems like the double
-    well have no analytic answer to compare against. DVR_Limit_Finder.py
-    reuses this exact function for that same purpose.
-
-    Parameters
-    ----------
-    E_numeric : array_like
-        Numerically computed energy levels (e.g. from DVR), ascending.
-    E_analytic : array_like
-        Ground-truth energy levels to compare against (analytic, or a
-        finer numerical reference), same length and ordering as
-        E_numeric (state n in E_numeric must correspond to state n
-        in E_analytic).
-
-    Returns
-    -------
-    dict with keys:
-        abs_error : ndarray
-            |E_numeric[n] - E_analytic[n]| for every level n.
-        rel_error : ndarray
-            abs_error[n] / E_analytic[n] for every level n (relative
-            error; meaningful here since E_analytic > 0 for all n).
-        max_abs_error, max_abs_idx : float, int
-            Largest absolute error and the state index n it occurs at.
-        max_rel_error, max_rel_idx : float, int
-            Largest relative error and the state index n it occurs at.
-        mean_abs_error, mean_rel_error : float
-            Spectrum-averaged absolute/relative error.
-    """
+def compute_energy_level_errors(E_numeric, E_reference):
+    """|E_numeric[n] - E_reference[n]| for every level n, plus the worst level."""
     E_numeric = np.asarray(E_numeric, dtype=float)
-    E_analytic = np.asarray(E_analytic, dtype=float)
-    if E_numeric.shape != E_analytic.shape:
-        raise ValueError(
-            f"Shape mismatch: E_numeric has {E_numeric.shape[0]} levels, "
-            f"E_analytic has {E_analytic.shape[0]} levels. Compute both "
-            f"with the same num_levels."
-        )
-
-    abs_error = np.abs(E_numeric - E_analytic)
-    rel_error = abs_error / E_analytic
-
-    max_abs_idx = int(np.argmax(abs_error))
-    max_rel_idx = int(np.argmax(rel_error))
-
-    return {
-        "abs_error": abs_error,
-        "rel_error": rel_error,
-        "max_abs_error": float(abs_error[max_abs_idx]),
-        "max_abs_idx": max_abs_idx,
-        "max_rel_error": float(rel_error[max_rel_idx]),
-        "max_rel_idx": max_rel_idx,
-        "mean_abs_error": float(np.mean(abs_error)),
-        "mean_rel_error": float(np.mean(rel_error)),
-    }
+    E_reference = np.asarray(E_reference, dtype=float)
+    abs_error = np.abs(E_numeric - E_reference)
+    worst = int(np.argmax(abs_error))
+    return {"abs_error": abs_error, "max_abs_error": float(abs_error[worst]), "max_abs_idx": worst,
+            "mean_abs_error": float(np.mean(abs_error))}
 
 
-# =====================================================================
-# Plot: numerical vs analytic energy levels, with a zoom on the worst error
-# =====================================================================
-def plot_energy_level_comparison(E_numeric, E_analytic, error_result=None, zoom=True, system_name="Harmonic Oscillator"):
-    """
-    Plot numerical vs analytic energy levels (E_n vs n) on the same
-    axes. If `zoom=True` and a zoom window around the largest-error
-    state is feasible (i.e. it isn't sitting right at the very first
-    or very last level, where there's nothing to zoom into), a second
-    subplot zooms into that region so the discrepancy is actually
-    visible -- at low n the two curves are normally so close that the
-    overall view alone won't show anything.
-
-    Parameters
-    ----------
-    E_numeric : array_like
-        Numerical (DVR) energy levels, ascending.
-    E_analytic : array_like
-        Exact analytic energy levels, same ordering as E_numeric.
-    error_result : dict or None, optional
-        Output of `compute_energy_level_errors`. If None, it is
-        computed internally so this function can be used standalone.
-    zoom : bool, optional
-        Whether to attempt a zoomed-in inset/subplot around the
-        worst-error region (default True).
-    system_name : str, optional
-        Used in the plot title.
-
-    Returns
-    -------
-    None (saves the figure to disk under figures/<system>/<params>/<category>/; see figures/output_paths.py).
-    """
-    E_numeric = np.asarray(E_numeric, dtype=float)
-    E_analytic = np.asarray(E_analytic, dtype=float)
+def plot_energy_level_comparison(E_numeric, E_reference, error_result, system_name, tolerance=None):
+    """Top: E_n of both spectra. Bottom: |E_n - E_n,ref| against n (log scale)."""
     n = np.arange(len(E_numeric))
-
-    if error_result is None:
-        error_result = compute_energy_level_errors(E_numeric, E_analytic)
-
-    worst_idx = error_result["max_abs_idx"]
-    N = len(E_numeric)
-    # A zoom only makes sense if there's a meaningful neighborhood around
-    # the worst state to show, i.e. it isn't pinned to either edge.
-    can_zoom = zoom and N >= 6 and 1 <= worst_idx <= N - 2
-
-    BLUE, ORANGE = "#1f77b4", "#d62728"
-
-    if can_zoom:
-        fig, (ax_main, ax_zoom) = plt.subplots(1, 2, figsize=(12, 5))
-    else:
-        fig, ax_main = plt.subplots(figsize=(7, 5))
-
-    fig.suptitle(f"{system_name} \n Numerical (DVR) vs Numerical Reference Energy Levels", fontsize=13, fontweight="bold")
-
-    # --- Main (full-range) comparison ---
-    ax_main.plot(n, E_analytic, color=ORANGE, linewidth=2, label="Numerical Reference $E_n$")
-    ax_main.plot(n, E_numeric, color=BLUE, linewidth=1.2, linestyle="--", marker=".", markersize=3, label="Numerical (DVR) $E_n$")
-    ax_main.set_xlabel("State index  n", fontsize=11)
-    ax_main.set_ylabel("$E_n$", fontsize=11)
-    ax_main.set_title("Full spectrum", fontsize=11)
-    ax_main.legend(fontsize=9)
-    ax_main.grid(True, linestyle="--", alpha=0.5)
-    if can_zoom:
-        # Mark the worst-error state on the main plot for reference.
-        ax_main.axvline(worst_idx, color="gray", linestyle=":", linewidth=1)
-
-    # --- Zoomed-in comparison around the largest-error state ---
-    if can_zoom:
-        half_width = max(3, int(0.03 * N))
-        lo = max(0, worst_idx - half_width)
-        hi = min(N, worst_idx + half_width + 1)
-        ax_zoom.plot(n[lo:hi], E_analytic[lo:hi], color=ORANGE, linewidth=2, marker="o", markersize=4, label="Analytic $E_n$")
-        ax_zoom.plot(n[lo:hi], E_numeric[lo:hi], color=BLUE, linewidth=1.5, linestyle="--", marker="x", markersize=5, label="Numerical (DVR) $E_n$")
-        ax_zoom.axvline(worst_idx, color="gray", linestyle=":", linewidth=1, label=f"Largest error at n={worst_idx}")
-        ax_zoom.set_xlabel("State index  n", fontsize=11)
-        ax_zoom.set_ylabel("$E_n$", fontsize=11)
-        ax_zoom.set_title(f"Zoom near n={worst_idx} (largest abs. error)", fontsize=11)
-        ax_zoom.legend(fontsize=9)
-        ax_zoom.grid(True, linestyle="--", alpha=0.5)
-
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 8), sharex=True)
+    fig.suptitle(f"{system_name}\nbase DVR vs reference DVR", fontsize=12, fontweight="bold")
+    ax1.plot(n, E_reference, color="#d62728", lw=2, label="reference")
+    ax1.plot(n, E_numeric, color="#1f77b4", lw=1, ls="--", label="base")
+    ax1.set_ylabel("$E_n$")
+    ax1.legend()
+    error = error_result["abs_error"]
+    ax2.plot(n, np.where(error > 0, error, np.nan), color="#1f77b4", lw=1.2)
+    if tolerance is not None:
+        ax2.axhline(tolerance, color="r", ls=":", label=f"tolerance = {tolerance:g}")
+        ax2.legend()
+    ax2.set_yscale("log")
+    ax2.set_xlabel("level index n")
+    ax2.set_ylabel(r"$|E_n - E_{n,\mathrm{ref}}|$")
+    for ax in (ax1, ax2):
+        ax.grid(True, ls="--", alpha=0.4)
     plt.tight_layout()
-    save_figure(fig, "energy_levels", "energy_level_comparison")
+    return save_figure(fig, "energy_levels", "energy_level_comparison")
 
 
-# =====================================================================
-# Plot: error vs state index (the actual accuracy curve)
-# =====================================================================
-def plot_energy_level_error(error_result, system_name="Harmonic Oscillator"):
-    """
-    Plot relative error vs state index n on a log y-axis -- the most
-    direct way to see how DVR accuracy degrades for higher excited
-    states on a fixed grid.
-
-    Parameters
-    ----------
-    error_result : dict
-        Output of `compute_energy_level_errors`.
-    system_name : str, optional
-        Used in the plot title.
-
-    Returns
-    -------
-    None (saves the figure to disk under figures/<system>/<params>/<category>/; see figures/output_paths.py).
-    """
-    rel_error = error_result["rel_error"]
-    n = np.arange(len(rel_error))
-
-    RED = "#d62728"
-    fig, ax = plt.subplots(figsize=(8, 5))
-    fig.suptitle(f"{system_name} \n DVR Energy-Level Error vs State Index", fontsize=13, fontweight="bold")
-
-
-    ax.plot(n, rel_error, color=RED, linewidth=1.2, linestyle="--", label=fr"Relative error ($(err_{{num}} - err_{{ref}})/err_{{ref}}$)")
-    ax.set_ylabel("Relative error", fontsize=11, color=RED)
-    ax.set_yscale("log")
-    ax.tick_params(axis="y", colors=RED)
-    
-    ax.set_xlabel("State index  n", fontsize=11)
-    ax.grid(which='major',linestyle=':', linewidth=0.8, alpha=0.7)
-    ax.grid(which='minor', linestyle=':', linewidth=0.5, alpha=0.5)
-    ax.legend(fontsize=9, loc="upper left")
-
-    plt.tight_layout()
-    save_figure(fig, "energy_levels", "energy_level_relative_error")
-
-
-# =====================================================================
-# Console summary
-# =====================================================================
-def print_accuracy_summary(error_result, num_levels, system_name="Harmonic Oscillator"):
-    """
-    Print a short human-readable accuracy summary to the console.
-
-    Parameters
-    ----------
-    error_result : dict
-        Output of `compute_energy_level_errors`.
-    num_levels : int
-        Total number of levels that were compared.
-    system_name : str, optional
-        Used in the printed header.
-
-    Returns
-    -------
-    None (prints to stdout).
-    """
-    print(f"\n{'-'*60}")
-    print(f"  {system_name}: DVR accuracy vs analytic energy levels")
-    print(f"{'-'*60}")
-    print(f"  Levels compared:      {num_levels}")
-    print(f"  Mean abs error:       {error_result['mean_abs_error']:.3e}")
-    print(f"  Mean rel error:       {error_result['mean_rel_error']:.3e}")
-    print(f"  Max abs error:        {error_result['max_abs_error']:.3e}  (at n = {error_result['max_abs_idx']})")
-    print(f"  Max rel error:        {error_result['max_rel_error']:.3e}  (at n = {error_result['max_rel_idx']})")
-    print(f"{'-'*60}\n")
+def print_accuracy_summary(error_result, system_name):
+    print(f"  {system_name}: {len(error_result['abs_error'])} levels compared with the reference")
+    print(f"    mean |dE| = {error_result['mean_abs_error']:.3e}")
+    print(f"    max  |dE| = {error_result['max_abs_error']:.3e}  (at n = {error_result['max_abs_idx']})")

@@ -156,6 +156,17 @@ A first validation pass also exposed two problems, both fixed before the pass wa
 - **The limit.** The quick scan probes $C_v^q-C_v^{cl}$ at $T_0, 2T_0, 4T_0,\dots$, with $T_0=10\max(E_1-E_0,\hbar\omega_{\min})$, until two consecutive probes agree within `tol_xi` and fall at least as fast as 1/T. Temperatures above $T_{\text{merge}}$ are not computed. The console says that quantum = classical there and how many levels they would have needed. A window wholly above it gets the verdict "merged".
 - **Results.** For b = −10, $T_{\text{merge}}\approx301$ (slope −2.0), and the T = 10⁴–10⁵ window that had crashed is answered "merged" in 72 s. For the base double well, $T_{\text{merge}}\approx22.4$ (slope −1.6). Default windows never reach $T_0$ and are unchanged; the re-run validation reproduces its numbers.
 
+### October 2026: a simpler solver you control (branch `simple-dvr`)
+
+By October the solver had many automatic parts: grid auto-configuration, a 3-pass check that stopped the run, an auto-tune loop, a ξ-ladder plateau search, per-temperature WKB sizing and caching, quick-scan presets and $T_{	ext{merge}}$. Each was reasonable on its own, but together they hid what was being computed and overrode the settings. Branch `simple-dvr` (created from `correct-classical` at `313e442`) replaces them with a smaller code in which every setting is chosen by hand and the code only reports. The full explanation is in [`CODE_GUIDE.md`](CODE_GUIDE.md).
+
+- **Settings, not searches.** The grid (`X_MIN`, `X_MAX`, `dx`), the number of levels and a list of ξ values are set in `config.py`, separately for the quick scan (`QUICK_SCAN`) and the full pipeline (`FULL_RUN`).
+- **The classical limit as ħ → ħ/ξ.** The same Eq. S7 as before, written at fixed V and T: each ξ solves V with ħ/ξ on a grid of spacing dx/ξ with num_states·ξ levels, so every ξ has the same points per wavelength and energy window as ξ = 1. The reported value is $C_v$ at the largest ξ, with the ħ²-law distance to the limit from the last two ξ.
+- **Trust checks instead of stops.** The quantum $C_v$ is recomputed with one setting changed at a time (finer grid, wider grid, more levels). The report lists the temperatures where each change moves $C_v$ by less than `cv_tol`, and where the classical curve is converged; nothing is changed or stopped.
+- **Walls are back.** Hard walls are now handled by the Colbert–Miller formula for a finite interval (`box_dvr_1d`, `WALLS = True`), exact for the particle in a box. This makes box potentials such as the Pöschl–Teller well in a box directly computable.
+- **Potentials in their own file** (`potentials.py`), with explicit parameters.
+- **Results unchanged.** The double well still shows no quantum excess wherever both curves are trusted; the DVR reproduces the analytic Pöschl–Teller-box excess (+0.343 at $k_BT = 0.105$) when the classical side is the exact integral.
+
 ## Version History
 
 Pre-reorganization filenames carried explicit version suffixes (e.g. `DVR_Algorithm_1_4.py`); current files no longer do. This table records the module-level changes that shaped the current design.
@@ -188,3 +199,8 @@ Pre-reorganization filenames carried explicit version suffixes (e.g. `DVR_Algori
 | `Quick_Scan` | 1.0 | New: quick, low-resolution quantum vs. classical $C_v(T)$ for one potential or a coefficient sweep, with a resolved/unresolved verdict; reuses the pipeline's functions |
 | `Quick_Scan` | 1.1 | `RememberedPotential` (bit-identical, ~2.5× faster, engine untouched); temperatures too hot for a DVR skipped, with the hottest feasible one reported (`QUICK_SCAN_MAX_GRID`) |
 | `Quick_Scan` | 1.2 | `QUICK_SCAN_MAX_GRID` removed: temperatures above the potential's merge temperature $T_{\text{merge}}$ (quantum = classical within `tol_xi`, shown by probes in the Wigner–Kirkwood regime) are not computed; verdict "merged" |
+| `DVR_Algorithm` | 2.0 | (`simple-dvr`) `auto_configure_dvr` and the 3-pass check removed; `solve_energy_levels(dx)`, `box_dvr_1d` (walls) and `suggest_grid` added; `colbert_miller_dvr_1d` unchanged |
+| `Classical_Limit_Numerical` | 3.0 | (`simple-dvr`) ħ → ħ/ξ for a list of ξ; ladder, plateau search and `ScaledSpectra` removed |
+| `Quantum_Classical_Combined` | 3.0 | (`simple-dvr`) `run()` computes quantum + classical $C_v$ and the one-setting-at-a-time trust checks; report and figures |
+| `Quick_Scan`, `Cv_Coefficient_Sweep`, `DVR_Limit_Finder` | 2.0 | (`simple-dvr`) plain loops over settings you choose; presets, $T_{	ext{merge}}$, escalation and bisection removed |
+| `Cv_AutoTune` | removed | (`simple-dvr`) no automatic changes of settings |

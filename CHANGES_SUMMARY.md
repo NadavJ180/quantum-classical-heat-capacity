@@ -1,5 +1,7 @@
 # Changes Since the Scaling Error: What, Where, and Why
 
+> **Branch `simple-dvr`:** most of the code described below (the ξ ladder, its ½ guard, `ScaledSpectra`, the Section 6 classical-reference factors, the quick-scan presets and $T_{	ext{merge}}$) was replaced by a simpler version with hand-chosen settings. The physics of section A (the potential must be scaled, Eq. S7) is kept, written as ħ → ħ/ξ. See [`CODE_GUIDE.md`](CODE_GUIDE.md), section 10.
+
 A short, physics-first list of every change made on branch `correct-classical` after we found that the classical-limit ξ-scan never scaled the potential. For each change it gives:
 - what changed;
 - where in the code (line numbers as of commit `9e8621b`);

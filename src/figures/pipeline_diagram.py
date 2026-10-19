@@ -31,13 +31,13 @@ OUTPUT_DIR = os.path.abspath(os.path.join(THIS_DIR, "..", "..", "figures"))
 # Laid out as a 2-row "S-curve" so the figure is roughly landscape (nice for
 # a two-column LaTeX figure* placement) instead of one long vertical strip.
 STAGES = [
-    ("1. Define potential $V(x)$\nand mass $m$",                          0.5, 3.3, "#dbe9f6"),
-    ("2. Auto-configure grid\n(turning points + Nyquist $\\Delta x$)",     2.6, 3.3, "#dbe9f6"),
-    ("3. Solve base DVR\nspectrum $\\{E_n\\}$",                            4.7, 3.3, "#cfe8cf"),
-    ("4. Generate high-res.\nreference spectrum",                         6.8, 3.3, "#cfe8cf"),
-    ("5. Verify resolution /\nboundary convergence",                      6.8, 1.1, "#f6e6c9"),
-    ("6. Compute $C_v(T)$;\nscan $\\xi$ for classical\nplateau + $n$-check", 4.7, 1.1, "#f6d3c9"),
-    ("7. Benchmark base vs.\nreference $C_v(T)$",                          2.6, 1.1, "#e3d6f0"),
+    ("1. Choose $V(x)$, grid,\nlevels $n$, $\\xi$ values",           0.5, 3.3, "#dbe9f6"),
+    ("2. Solve DVR\nspectrum $\\{E_n\\}$",                           2.6, 3.3, "#cfe8cf"),
+    ("3. Trust checks:\nfiner grid, wider grid,\nmore levels",       4.7, 3.3, "#f6e6c9"),
+    ("4. Classical limit:\nsolve with $\\hbar/\\xi$\nfor every $\\xi$", 6.8, 3.3, "#f6d3c9"),
+    ("5. Quantum vs classical\n$C_v(T)$ where\nboth are trusted",    6.8, 1.1, "#f6d3c9"),
+    ("6. Reference spectrum\n(wider, finer grid)",                   4.7, 1.1, "#cfe8cf"),
+    ("7. Benchmark and\nDVR limits vs.\nreference",                  2.6, 1.1, "#e3d6f0"),
 ]
 
 BOX_W, BOX_H = 1.9, 1.15
@@ -88,17 +88,16 @@ arrow(3, 4)
 arrow(4, 5)
 arrow(5, 6)
 
-# feedback loop: stage 5 can send you back to stage 2 (widen/refine grid).
-# Routed as a clean right-angle path underneath row 2 so it never crosses
-# any box, rather than a diagonal arc cutting through stage 3.
-x5, y5, bx5, by5 = centers[4]   # stage 5 (verify convergence)
-x2, y2, bx2, by2 = centers[1]   # stage 2 (auto-configure grid)
+# feedback loop: the trust report (stage 5) sends you back to stage 1, where
+# you change the settings yourself. Routed underneath row 2 so it never crosses a box.
+x5, y5, bx5, by5 = centers[4]   # stage 5 (quantum vs classical, trust report)
+x1, y1, bx1, by1 = centers[0]   # stage 1 (your settings)
 y_drop = 0.55
 verts = [
     (bx5 + BOX_W * 0.25, by5),          # leave from bottom of box 5
     (bx5 + BOX_W * 0.25, y_drop),       # drop down
-    (bx2 + BOX_W * 0.75, y_drop),       # travel left, under everything
-    (bx2 + BOX_W * 0.75, by2),          # rise up into bottom of box 2
+    (bx1 + BOX_W * 0.5, y_drop),        # travel left, under everything
+    (bx1 + BOX_W * 0.5, by1),           # rise up into bottom of box 1
 ]
 loop_path = Path(verts, [Path.MOVETO, Path.LINETO, Path.LINETO, Path.LINETO])
 loop = FancyArrowPatch(
@@ -106,8 +105,8 @@ loop = FancyArrowPatch(
     linestyle="dashed", color="#a33", zorder=1,
 )
 ax.add_patch(loop)
-ax.text((bx5 + bx2) / 2 + BOX_W * 0.5, y_drop - 0.32,
-        "refine grid if not converged", fontsize=8.5,
+ax.text((bx5 + bx1) / 2 + BOX_W * 0.5, y_drop - 0.32,
+        "you change the settings where the report says a curve is not trusted", fontsize=8.5,
         color="#a33", ha="center", style="italic")
 
 ax.set_title("Numerical workflow of the DVR heat-capacity pipeline",
