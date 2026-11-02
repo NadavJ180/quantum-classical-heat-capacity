@@ -68,7 +68,7 @@ from figures.plot_potential         import plot_potential_with_spectrum
 from config                         import (MASS, HBAR, my_potential,
                                             SYSTEM_NAME, T_UNITS_LABEL,
                                             POTENTIAL_PARAMS, POTENTIAL_FORMULA,
-                                            NUM_STATES, BETA_MIN, BETA_MAX,
+                                            NUM_STATES, DVR_DX_MAX, BETA_MIN, BETA_MAX,
                                             N_BETA, XI_START, TOL_XI,
                                             MIN_STABLE_XI, XI_MULT,
                                             MAX_XI_STEPS, XI_MAX, TOL_CV,
@@ -178,7 +178,7 @@ if __name__ == "__main__":
               f"MAX_XI_STEPS={max_xi_steps_cur}) ---")
 
         x_min, x_max, n_grid = auto_configure_dvr(
-            my_potential, num_states_cur, mass=MASS, hbar=HBAR
+            my_potential, num_states_cur, mass=MASS, hbar=HBAR, dx_max=DVR_DX_MAX
         )
 
         with SimpleTimer(f"Round {escalation_round}: DVR 3-pass convergence check"):
@@ -203,7 +203,7 @@ if __name__ == "__main__":
                 xi_multiplier=XI_MULT, max_xi_steps=max_xi_steps_cur,
                 tol_cv=TOL_CV, min_stable_n=MIN_STABLE_N,
                 mass=MASS, hbar=HBAR, thermal_coverage=HOT_STATE_SAFETY,
-                xi_max=XI_MAX, spectra=classical_spectra,
+                xi_max=XI_MAX, spectra=classical_spectra, dx_max=DVR_DX_MAX,
                 cv_analytic=None,          # no analytic overlay
                 T_units_label=T_UNITS_LABEL,
             )
@@ -396,7 +396,7 @@ if __name__ == "__main__":
             tol_cv=TOL_CV, min_stable_n=MIN_STABLE_N,
             mass=MASS, hbar=HBAR, thermal_coverage=HOT_STATE_SAFETY, xi_max=XI_MAX,
             span_factor=classical_span_factor,
-            dx_factor=classical_dx_factor,
+            dx_factor=classical_dx_factor, dx_max=DVR_DX_MAX,
             classical_reference_label=classical_ref_label,
             T_units_label=T_UNITS_LABEL,
         )
@@ -441,5 +441,5 @@ if __name__ == "__main__":
             T_units_label=T_UNITS_LABEL, symmetric_value=SCAN_SYMMETRIC_VALUE,
             xi_start=XI_START, tol_xi=TOL_XI, min_stable_xi=MIN_STABLE_XI,
             xi_multiplier=XI_MULT, max_xi_steps=MAX_XI_STEPS, xi_max=XI_MAX,
-            tol_cv=TOL_CV, min_stable_n=MIN_STABLE_N,
+            tol_cv=TOL_CV, min_stable_n=MIN_STABLE_N, dx_max=DVR_DX_MAX,
         )

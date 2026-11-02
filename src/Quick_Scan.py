@@ -157,10 +157,11 @@ def quick_settings(resolution):
 
 
 def _new_spectra(potential_func, settings):
-    """A ScaledSpectra cache with this resolution's level coverage and DVR tolerance."""
+    """A ScaledSpectra cache with this resolution's level coverage and DVR
+    tolerance, and the potential's grid-spacing bound config.DVR_DX_MAX."""
     return ScaledSpectra(potential_func, mass=config.MASS, hbar=config.HBAR,
                          thermal_coverage=settings["thermal_coverage"],
-                         dvr_tolerance=settings["dvr_tolerance"])
+                         dvr_tolerance=settings["dvr_tolerance"], dx_max=config.DVR_DX_MAX)
 
 
 # =====================================================================

@@ -109,6 +109,18 @@ A short, physics-first list of every change made on branch `correct-classical` a
   - the exact classical Cv, ½ + β²·Var(V) by numerical integration (option A, used only as a check);
   - the Pöschl–Teller potential, whose spectrum is exactly known, as a test that needs no DVR.
 
+## E2. A grid-spacing bound for narrow features: `DVR_DX_MAX` (2026-10-13, uncommitted)
+
+- **What:** an optional bound on the DVR grid spacing, dx = min(π/2k_max, `DVR_DX_MAX`). It is set per potential in `config.py`; the default is `None` (no bound), and the sech² dimple block sets σ/4.
+- **Where:**
+  - [`src/DVR/DVR_Algorithm.py`](src/DVR/DVR_Algorithm.py): `auto_configure_dvr(..., dx_max=None)`.
+  - Passed through every function that builds a grid: `ScaledSpectra` and `sweep_temperature_range` in `Classical_Limit_Numerical.py`; `Quick_Scan._new_spectra`; `Quantum_Classical_Combined.run`; `Cv_Numerical_Benchmark`; the four functions of the Section 7 chain in `Cv_Coefficient_Sweep.py`; the master (Sections 1, 4, 6, 7); `figures/plot_potential.py`.
+  - The full table is in [`verification/quantum_excess/SUMMARY.md`](verification/quantum_excess/SUMMARY.md), section 5.2.
+- **Principle (numerics, but with a physical reason):** the DVR samples V only at its grid points. The momentum (Nyquist) rule resolves the wavefunctions at the energy ceiling, but not a feature of V narrower than the local de Broglie wavelength.
+  - **Why it matters here:** a quantum-excess candidate needs exactly such a feature (a dimple narrower than the thermal wavelength).
+  - **What went wrong without it:** dx = 0.8–1.6σ, the bound state came out at −10.7 instead of −12.5, and the 3-pass check raised.
+- **Results unchanged:** bit-identical with `None` and with a loose bound, on four pipeline paths ([`verification/quantum_excess/DX_MAX_REGRESSION.md`](verification/quantum_excess/DX_MAX_REGRESSION.md)).
+
 ## F. The exact classical Cv, ½ + β²·Var(V): NOT used by the pipeline
 
 **Status.** No code in `src/` computes this formula. The pipeline's classical curve always comes from the ξ-scan, i.e. from DVR spectra of ξ²V. The pipeline does rely on **one consequence** of it: the plateau test of A5 accepts a ξ step only if Cv ≥ ½ − tol (Step 5 below). That reliance is an open item, still to be verified and proven (see A5). The formula appears in `src/` only in two docstrings, which state it to justify that rule:

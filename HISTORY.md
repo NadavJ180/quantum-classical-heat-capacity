@@ -156,6 +156,21 @@ A first validation pass also exposed two problems, both fixed before the pass wa
 - **The limit.** The quick scan probes $C_v^q-C_v^{cl}$ at $T_0, 2T_0, 4T_0,\dots$, with $T_0=10\max(E_1-E_0,\hbar\omega_{\min})$, until two consecutive probes agree within `tol_xi` and fall at least as fast as 1/T. Temperatures above $T_{\text{merge}}$ are not computed. The console says that quantum = classical there and how many levels they would have needed. A window wholly above it gets the verdict "merged".
 - **Results.** For b = −10, $T_{\text{merge}}\approx301$ (slope −2.0), and the T = 10⁴–10⁵ window that had crashed is answered "merged" in 72 s. For the base double well, $T_{\text{merge}}\approx22.4$ (slope −1.6). Default windows never reach $T_0$ and are unchanged; the re-run validation reproduces its numbers.
 
+### October 2026, continued: where can the quantum $C_v$ exceed the classical one?
+
+Full account: [`verification/quantum_excess/SUMMARY.md`](verification/quantum_excess/SUMMARY.md). Numbers: its `RESULTS.md`, from `quantum_excess_check.py`, which uses the pipeline's DVR and the exact classical integral as a check.
+
+- **The criterion.** $C_v^q>C_v^{cl}$ exactly where $\Delta U=U_q-U_{cl}$ rises with T. $\Delta U$ runs from the zero-point energy to 0, so $\int_0^\infty(C_v^q-C_v^{cl})\,dT=-(E_0-V_{min})$: an excess is always a window, paid for elsewhere.
+- **The quartic family cannot do it.** 35 shapes were checked, and none rises above classical. The Schottky-like bumps of the classical curves are configuration-space effects.
+- **Steep walls give little.** $|x|^n$ with $n\ge13$, and the box, exceed classical by at most 0.04–0.06.
+- **What works: a narrow dimple with one bound state in a wide, soft trap.** Its zero-point energy lowers the quantum escape energy, so the quantum particle reaches the trap's entropy first. The best case is $V=(x/10)^6-37.5\,\mathrm{sech}^2(x/0.1)$: $C_v^q=3.98$ against $C_v^{cl}=1.55$ at $k_BT\approx3.2$, with a window of 2.0–4.0.
+- **Homogeneous scaling.** The candidates scale homogeneously only under scale-invariant strokes $V\to\gamma^{-2}V(x/\gamma)$, verified to ~1e-12. For the quartic, the two engine edges must share $b^6/a^5$, $c^3/a^2$ and $d^2/a$. With such strokes, an Otto cycle confined to the window gives $W_q/W_{cl}\approx1.9$–2.4 at equal efficiency.
+- **`src/config.py`** gained an inactive sech² block.
+- **The DVR grid spacing (`DVR_DX_MAX`).** At first the pipeline could not run the candidate. `auto_configure_dvr` picked dx from the wavefunction momentum alone, giving dx ≈ 0.8–1.6 σ; the dimple's bound state came out at −10.7 instead of −12.5, and the 3-pass check raised.
+  - **The fix (approved and implemented):** an optional per-potential bound `DVR_DX_MAX` (default None), with dx = min(π/2k_max, DVR_DX_MAX), passed explicitly through every function that builds a grid. The sech² block sets σ/4.
+  - **Regression:** bit-identical with None and with a loose bound, on four pipeline paths (`verification/quantum_excess/DX_MAX_REGRESSION.md`).
+  - **The full list of code changes:** SUMMARY.md section 5.2.
+
 ## Version History
 
 Pre-reorganization filenames carried explicit version suffixes (e.g. `DVR_Algorithm_1_4.py`); current files no longer do. This table records the module-level changes that shaped the current design.
@@ -166,10 +181,13 @@ Pre-reorganization filenames carried explicit version suffixes (e.g. `DVR_Algori
 | `DVR_Algorithm` | 1.4 | Multiprocessing timer removed; replaced with inline per-pass timing |
 | `DVR_Algorithm` | 1.5 | Adaptive span-expansion loop added to `auto_configure_dvr`; `E_ceiling` reverted from an oversized temporary hack back to `1.5 * num_levels` |
 | `DVR_Algorithm` | 1.6 | Optional `energy_ceiling`, `turning_points`, `padding` in `auto_configure_dvr` (defaults unchanged), for the scaled potentials ξ²V |
+| `DVR_Algorithm` | 1.7 | Optional `dx_max` in `auto_configure_dvr`: dx = min(Nyquist dx, dx_max) (default None, unchanged), for potentials with a feature narrower than the de Broglie wavelength |
 | `Classical_Limit_Numerical` | 1.0 | Extracted from the combined file; fully general |
 | `Classical_Limit_Numerical` | 2.0 | Classical-limit correction: ξ²V re-solved at every ξ (Eq. S7), ħ²-law error estimate, ½ lower bound, plateau picker fixed, no fallback |
+| `Classical_Limit_Numerical` | 2.1 | `dx_max` passed through `ScaledSpectra` and `sweep_temperature_range` (default None, unchanged) |
 | `Quantum_Classical_Combined` | 1.9 | System-agnostic Cv pipeline; xi/n engine extracted |
 | `Quantum_Classical_Combined` | 2.0 | `run()` takes the potential; quantum Cv from the whole base spectrum; new ξ-diagnostic plot |
+| `Quantum_Classical_Combined` | 2.1 | `run()` passes `dx_max` to the ξ-scan |
 | `DVR_Reference_Generator` | 1.0 | New: numerical reference grid generation, replacing the analytic formula as ground truth |
 | `DVR_Limit_Finder` | 1.0 | New: resolution and level-count limit searches |
 | `DVR_Limit_Finder` | 1.1 | $\Delta x$ replaces point count as the resolution-search axis |
@@ -177,14 +195,18 @@ Pre-reorganization filenames carried explicit version suffixes (e.g. `DVR_Algori
 | `Cv_Numerical_Benchmark` | 1.0 | New: base vs. reference Cv comparison (quantum + classical) |
 | `Cv_Numerical_Benchmark` | 1.1 | Classical reference re-solves every ξ²V on refined grids; data-scaled classical plot |
 | `Cv_Numerical_Benchmark` | 1.2 | Separate label for the classical reference grid (`classical_reference_label`), shown on its figure and in the console; the two-line titles no longer overlap the top panels |
+| `Cv_Numerical_Benchmark` | 1.3 | `dx_max` passed through to the reference ξ-scan |
 | `HO_Energy_Level_Error` | 1.1 | Docstring clarified — function is fully generic |
 | `Quantum_HO_Master` | 1.5 | Analytical sections removed; fully numerical pipeline (numerical reference is now the sole ground truth for Sections 3, 5, 6) |
 | `Quantum_HO_Master` | 1.6 | Section 6's classical reference on its own grid factors (`CLASSICAL_REFERENCE_*`, default 1.5/1.5), with the precise option `CLASSICAL_REFERENCE_PRECISE` (Section 2's 2/2) |
+| `Quantum_HO_Master` | 1.7 | `config.DVR_DX_MAX` passed to Sections 1, 4, 6 and 7 |
 | `Cv_AutoTune` | 1.0 | New: `BETA_MIN` auto-fill from $T_{\max}=10\Delta E/k_B$, and escalation diagnostics for the `NUM_STATES`/`XI_START` closed loop |
 | `Cv_AutoTune` | 1.1 | Escalation mapped to the corrected scan: `NUM_STATES` for the quantum curve only, ξ ladder on `max_steps`; `xi_cap`/`dvr_failed` reported, not escalated |
 | `Cv_Coefficient_Sweep` | 1.0 | New: Section 7 coefficient-sweep comparison plot (quantum $C_v(T)$ per variant vs. the base run's reused classical limit) |
 | `Cv_Coefficient_Sweep` | 1.1 | Each variant drawn against its own classical limit (quantum solid, classical dashed, same color) |
 | `Cv_Coefficient_Sweep` | 1.2 | `plot_coefficient_sweep` takes an optional title and save location (`title`, `category`, `name`) and returns the figure path, so the quick scan can reuse it |
+| `Cv_Coefficient_Sweep` | 1.3 | `dx_max` through every variant's quantum solve and classical curve |
 | `Quick_Scan` | 1.0 | New: quick, low-resolution quantum vs. classical $C_v(T)$ for one potential or a coefficient sweep, with a resolved/unresolved verdict; reuses the pipeline's functions |
 | `Quick_Scan` | 1.1 | `RememberedPotential` (bit-identical, ~2.5× faster, engine untouched); temperatures too hot for a DVR skipped, with the hottest feasible one reported (`QUICK_SCAN_MAX_GRID`) |
 | `Quick_Scan` | 1.2 | `QUICK_SCAN_MAX_GRID` removed: temperatures above the potential's merge temperature $T_{\text{merge}}$ (quantum = classical within `tol_xi`, shown by probes in the Wigner–Kirkwood regime) are not computed; verdict "merged" |
+| `Quick_Scan` | 1.3 | Its spectra use `config.DVR_DX_MAX` |

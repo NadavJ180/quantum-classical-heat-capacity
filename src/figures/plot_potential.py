@@ -246,14 +246,15 @@ def plot_potential_with_spectrum(x_min, x_max, potential_func, energies, system_
 
 
 def main():
-    from config import MASS, HBAR, NUM_STATES, SYSTEM_NAME, POTENTIAL_PARAMS, my_potential
+    from config import (MASS, HBAR, NUM_STATES, DVR_DX_MAX, SYSTEM_NAME, POTENTIAL_PARAMS,
+                        my_potential)
     from DVR.DVR_Algorithm import auto_configure_dvr, get_fully_converged_energy_levels
     from figures.output_paths import set_context
 
     set_context(SYSTEM_NAME, POTENTIAL_PARAMS)
     print(f"Configuring grid for '{SYSTEM_NAME}', {NUM_STATES} levels ...")
     x_min, x_max, n_grid = auto_configure_dvr(
-        my_potential, NUM_STATES, mass=MASS, hbar=HBAR
+        my_potential, NUM_STATES, mass=MASS, hbar=HBAR, dx_max=DVR_DX_MAX
     )
 
     print("Solving (3-pass converged) for the real energy levels "

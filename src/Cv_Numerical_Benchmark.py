@@ -70,7 +70,8 @@ from figures.output_paths import save_figure
 def _run_cv_pipeline(energies, potential_func, beta_arr,
                      xi_start, tol_xi, min_stable_xi, xi_multiplier, max_xi_steps,
                      tol_cv, min_stable_n, mass=1.0, hbar=1.0, thermal_coverage=20.0,
-                     xi_max=np.inf, span_factor=1.0, dx_factor=1.0, label="", verbose=True):
+                     xi_max=np.inf, span_factor=1.0, dx_factor=1.0, dx_max=None,
+                     label="", verbose=True):
     """
     Run sweep_temperature_range + compute_quantum_heat_capacity_curve
     for one (spectrum, grid quality) pair. Lightweight wrapper used
@@ -94,6 +95,9 @@ def _run_cv_pipeline(energies, potential_func, beta_arr,
     span_factor, dx_factor : float, optional
         Grid widening/refinement applied to every xi^2 V solve (1.0 =
         the base grids; Section 6's reference passes its own factors).
+    dx_max : float or None, optional
+        Grid-spacing bound of every xi^2 V solve (config.DVR_DX_MAX),
+        passed through to sweep_temperature_range.
     label : str, optional
         Short description printed before the sweep ("base" / "reference").
     verbose : bool, optional
@@ -113,7 +117,7 @@ def _run_cv_pipeline(energies, potential_func, beta_arr,
         potential_func, beta_arr,
         xi_start, tol_xi, min_stable_xi, xi_multiplier, max_xi_steps,
         tol_cv, min_stable_n, mass=mass, hbar=hbar, thermal_coverage=thermal_coverage,
-        xi_max=xi_max, span_factor=span_factor, dx_factor=dx_factor,
+        xi_max=xi_max, span_factor=span_factor, dx_factor=dx_factor, dx_max=dx_max,
         verbose=verbose,
     )
 
@@ -421,7 +425,7 @@ def run_cv_numerical_benchmark(base_cv_results, reference_energies, potential_fu
                                 xi_multiplier, max_xi_steps,
                                 tol_cv, min_stable_n,
                                 mass=1.0, hbar=1.0, thermal_coverage=20.0, xi_max=np.inf,
-                                span_factor=2.0, dx_factor=2.0,
+                                span_factor=2.0, dx_factor=2.0, dx_max=None,
                                 classical_reference_label=None,
                                 T_units_label=r"$k_B T / \hbar\omega$"):
     """
@@ -472,6 +476,9 @@ def run_cv_numerical_benchmark(base_cv_results, reference_energies, potential_fu
         Grid widening/refinement for every reference xi^2 V solve --
         config.CLASSICAL_REFERENCE_SPAN_FACTOR / _DX_FACTOR, or Section 2's
         own factors when config.CLASSICAL_REFERENCE_PRECISE is True.
+    dx_max : float or None, optional
+        Grid-spacing bound (config.DVR_DX_MAX), applied to the reference
+        grids before they are widened/refined. Should match the base.
     classical_reference_label : str or None, optional
         Label of the classical reference grid, shown on Figure 2 and in
         the console summary (None = `reference_label`, i.e. the same
@@ -505,7 +512,7 @@ def run_cv_numerical_benchmark(base_cv_results, reference_energies, potential_fu
         reference_energies, potential_func, beta_arr,
         xi_start, tol_xi, min_stable_xi, xi_multiplier, max_xi_steps,
         tol_cv, min_stable_n, mass=mass, hbar=hbar, thermal_coverage=thermal_coverage,
-        xi_max=xi_max, span_factor=span_factor, dx_factor=dx_factor,
+        xi_max=xi_max, span_factor=span_factor, dx_factor=dx_factor, dx_max=dx_max,
         label="reference", verbose=True,
     )
 

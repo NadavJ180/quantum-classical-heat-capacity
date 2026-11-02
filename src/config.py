@@ -38,6 +38,18 @@ again at the top of each iteration before re-running the pipeline.
 # --- Physical constants (dimensionless: ℏ = m = ω = k_B = 1) ---
 MASS, HBAR, OMEGA = 1.0, 1.0, 1.0
 
+# --- DVR grid-spacing bound (a property of the potential) ---
+# The DVR picks dx from the wavefunction momentum at its energy ceiling
+# (dx = pi / 2 k_max, DVR_Algorithm.auto_configure_dvr). That resolves the
+# wavefunctions but not V itself: a feature of V narrower than the local
+# de Broglie wavelength (e.g. a narrow dimple of width s) is under-sampled.
+# DVR_DX_MAX caps dx for every DVR solve of the pipeline (base, reference,
+# xi^2 V, quick scan, coefficient sweep): dx = min(pi / 2 k_max, DVR_DX_MAX).
+# Use ~1/4 of V's narrowest feature width. None = no cap (smooth potentials
+# such as the HO and the quartic wells never need it). A potential block
+# below may override this default.
+DVR_DX_MAX = None
+
 # --- Potential function (swap this for any smooth V(x)) ---
 r'''
 POTENTIAL_PARAMS = {"mass": MASS, "omega": OMEGA}
@@ -62,7 +74,7 @@ POTENTIAL_FORMULA = r"$V(x) = \frac{1}{2} m \omega^2 x^2$"
 
 # a, b, c, d: coefficients of V(x) = a*x^4 + b*x^3 + c*x^2 + d*x.
 # b != 0 breaks the x -> -x symmetry (b = 0 recovers the symmetric well).
-POTENTIAL_PARAMS = {"a": 0.25, "b": -0.5, "c": -0.5, "d": 0.0}
+POTENTIAL_PARAMS = {"a": 0.01, "b": -0.5, "c": 5.0, "d": 0.0}
 
 def my_potential(x, p=POTENTIAL_PARAMS):
         return p["a"] * (x ** 4) + p["b"] * (x ** 3) + p["c"] * (x ** 2) + p["d"] * x
@@ -80,6 +92,45 @@ T_UNITS_LABEL = r"$k_B T \,/\, \hbar\omega$"
 # LaTeX's own braces. Must be kept in sync with my_potential by hand,
 # same as SYSTEM_NAME/T_UNITS_LABEL above.
 POTENTIAL_FORMULA = r"$V(x) = <<a>>x^4<<b>>x^3<<c>>x^2<<d>>x$"
+
+# --- Alternative: a narrow sech^2 dimple in a wide, soft x^6 trap ---
+# Candidate for a window where the quantum Cv is ABOVE the classical Cv
+# (verification/quantum_excess/SUMMARY.md). The Pöschl-Teller dimple
+# -D sech^2(x/s), with lam (lam + 1) = 2 m D s^2 / hbar^2, holds exactly
+# one bound state for lam <= 1, at E_0 = -hbar^2 lam^2 / (2 m s^2); its
+# zero-point energy is D / (lam + 1). D = 37.5, s = 0.1 gives lam = 0.5,
+# E_0 = -12.5. Expected (verification/quantum_excess, exact classical integral):
+# Cv_q = 3.98 vs Cv_cl = 1.55 at k_B T ~ 3.2, quantum above classical for
+# k_B T ~ 2.0-4.0.
+# To use it, swap this block with the active one above, and also set
+#   QUICK_SCAN_BETA_RANGE = 2.0, 0.1                 (k_B T = 0.5 .. 10)
+#   SCAN_PARAM = "D", SCAN_SYMMETRIC_VALUE = None    (Section 7 / sweep mode)
+# POTENTIAL_FORMULA is plain text (placeholders would print "(x/+10)"):
+# keep it in sync with POTENTIAL_PARAMS by hand.
+# The dimple is narrower than the thermal de Broglie wavelength, so the
+# block sets DVR_DX_MAX = s / 4: without it the DVR's momentum rule gives
+# dx = 0.8-1.6 s, E_0 comes out -10.7 instead of -12.5 and the 3-pass check
+# raises "DVR CONVERGENCE ERROR" (verification/quantum_excess/SUMMARY.md,
+# section 5). COST WARNING: the quantum curve is cheap, but the classical
+# xi-scan in the excess window needs xi ~ 30-80 on a grid spanning the whole
+# trap (1e4-1e5 points); a resolution-1 quick scan over k_B T = 1.5-5 passed
+# 3.6 GB at T = 5 without finishing (SUMMARY.md, section 5.3).
+r'''
+import numpy as np
+
+POTENTIAL_PARAMS = {"D": 37.5, "s": 0.1, "L": 10.0}
+DVR_DX_MAX = POTENTIAL_PARAMS["s"] / 4
+
+def my_potential(x, p=POTENTIAL_PARAMS):
+    """sech^2 dimple (depth D, width s) at the centre of an (x/L)^6 trap.
+    sech^2 u = 4 e^-2|u| / (1 + e^-2|u|)^2: no cosh overflow on wide grids."""
+    e = np.exp(-2.0 * np.abs(x / p["s"]))
+    return (x / p["L"]) ** 6 - p["D"] * 4.0 * e / (1.0 + e) ** 2
+
+SYSTEM_NAME   = "1-D sech2 dimple in x6 trap"
+T_UNITS_LABEL = r"$k_B T$  ($\hbar = m = 1$)"
+POTENTIAL_FORMULA = r"$V(x) = (x/10)^6 - 37.5\,\mathrm{sech}^2(x/0.1)$"
+'''
 
 # --- DVR base grid: number of energy levels ---
 # Starting guess only -- Quantum_HO_Master.py's auto-tune loop (see
@@ -213,9 +264,9 @@ ref_label = reference_label(REFERENCE_SPAN_FACTOR, REFERENCE_DX_FACTOR)
 #   pipeline's ladder start XI_START and cap XI_MAX. Resolution 3 is the
 #   full pipeline's own settings, without its diagnostics and reference
 #   checks.
-QUICK_SCAN_MODE       = "sweep"
+QUICK_SCAN_MODE       = "single"
 QUICK_SCAN_RESOLUTION = 1
-QUICK_SCAN_BETA_RANGE = None
+QUICK_SCAN_BETA_RANGE = 50, 0.001 #None to use config max / min
 QUICK_SCAN_PRESETS = {
     1: dict(n_beta=60,     tol_xi=1e-2,   xi_mult=1.5,     min_stable_xi=2,
             thermal_coverage=12.0, dvr_tolerance=1e-3),

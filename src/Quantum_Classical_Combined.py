@@ -245,7 +245,7 @@ def run(energies, potential_func, system_name,
         xi_start=1.0, tol_xi=2e-3, min_stable_xi=3, xi_multiplier=1.25, max_xi_steps=30,
         tol_cv=1e-4, min_stable_n=3,
         mass=1.0, hbar=1.0, thermal_coverage=20.0, xi_max=np.inf, spectra=None,
-        cv_analytic=None, T_units_label=r"$k_B T \,/\, E_0$"):
+        dx_max=None, cv_analytic=None, T_units_label=r"$k_B T \,/\, E_0$"):
     """
     Run the full general-purpose Cv pipeline for ANY system: sweep the
     temperature range, find the numerical classical limit at every T
@@ -292,6 +292,9 @@ def run(energies, potential_func, system_name,
     spectra : ScaledSpectra or None, optional
         Cache of scaled spectra to reuse (e.g. from the previous
         auto-tune round); None builds a new one. Returned in the result.
+    dx_max : float or None, optional
+        Grid-spacing bound for a new cache (config.DVR_DX_MAX), passed
+        through to sweep_temperature_range.
     cv_analytic : float, ndarray, or None, optional
         If known, the analytic classical-limit Cv to overlay as a
         reference curve on the summary plot.
@@ -322,7 +325,8 @@ def run(energies, potential_func, system_name,
         potential_func, beta_arr,
         xi_start, tol_xi, min_stable_xi, xi_multiplier, max_xi_steps,
         tol_cv, min_stable_n, mass=mass, hbar=hbar,
-        thermal_coverage=thermal_coverage, xi_max=xi_max, spectra=spectra, verbose=True,
+        thermal_coverage=thermal_coverage, xi_max=xi_max, spectra=spectra, dx_max=dx_max,
+        verbose=True,
     )
     cv_classical = sweep["cv_classical"]
     xi_conv = sweep["xi_conv"]

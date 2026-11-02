@@ -297,7 +297,8 @@ def _diagnose_variant_failure(potential_func, probe=1000.0):
 # =====================================================================
 # Per-variant DVR solve (one attempt, no escalation)
 # =====================================================================
-def solve_variant_spectrum(my_potential, variant_params, num_states, mass=1.0, hbar=1.0):
+def solve_variant_spectrum(my_potential, variant_params, num_states, mass=1.0, hbar=1.0,
+                           dx_max=None):
     """
     Solve for one variant potential's own energy spectrum, with the
     same rigor as the base run's Section 1 & 4: auto-configured grid,
@@ -313,13 +314,16 @@ def solve_variant_spectrum(my_potential, variant_params, num_states, mass=1.0, h
     num_states : int
         Number of energy levels to solve for.
     mass, hbar : float, optional
+    dx_max : float or None, optional
+        Grid-spacing bound (config.DVR_DX_MAX), see `auto_configure_dvr`.
 
     Returns
     -------
     energies, x_min, x_max : ndarray, float, float
     """
     potential_func = functools.partial(my_potential, p=variant_params)
-    x_min, x_max, n_grid = auto_configure_dvr(potential_func, num_states, mass=mass, hbar=hbar)
+    x_min, x_max, n_grid = auto_configure_dvr(potential_func, num_states, mass=mass, hbar=hbar,
+                                              dx_max=dx_max)
     energies = get_fully_converged_energy_levels(
         potential_func=potential_func, num_levels=num_states,
         x_min=x_min, x_max=x_max, num_points=n_grid,
@@ -361,7 +365,7 @@ def compute_variant_quantum_cv(my_potential, variant_params, num_states,
 # =====================================================================
 def solve_variant_with_hot_coverage(my_potential, variant_params, num_states, beta_arr,
                                      mass, hbar, hot_state_safety,
-                                     num_states_growth, num_states_cap, max_rounds):
+                                     num_states_growth, num_states_cap, max_rounds, dx_max=None):
     """
     `solve_variant_spectrum`, escalating this ONE variant's own
     `num_states` if its top computed level doesn't clear the same
@@ -391,6 +395,8 @@ def solve_variant_with_hot_coverage(my_potential, variant_params, num_states, be
         Upper bound on `num_states` (config.NUM_STATES_CAP).
     max_rounds : int
         Maximum escalation rounds (config.MAX_ESCALATION_ROUNDS).
+    dx_max : float or None, optional
+        Grid-spacing bound (config.DVR_DX_MAX), see `auto_configure_dvr`.
 
     Returns
     -------
@@ -406,7 +412,8 @@ def solve_variant_with_hot_coverage(my_potential, variant_params, num_states, be
     energies = x_min = x_max = None
     coverage_ok = False
     for round_i in range(max_rounds):
-        energies, x_min, x_max = solve_variant_spectrum(my_potential, variant_params, n, mass, hbar)
+        energies, x_min, x_max = solve_variant_spectrum(my_potential, variant_params, n, mass, hbar,
+                                                        dx_max=dx_max)
         coverage_ok = float(energies[-1]) >= hot_state_safety / beta_min
         if coverage_ok or n >= num_states_cap or round_i == max_rounds - 1:
             break
@@ -793,7 +800,8 @@ def run_coefficient_sweep(base_cv_results, my_potential, base_params,
                            T_units_label=r"$k_B T \,/\, E_0$",
                            symmetric_value=None,
                            xi_start=1.0, tol_xi=2e-3, min_stable_xi=3, xi_multiplier=1.25,
-                           max_xi_steps=35, xi_max=np.inf, tol_cv=1e-4, min_stable_n=3):
+                           max_xi_steps=35, xi_max=np.inf, tol_cv=1e-4, min_stable_n=3,
+                           dx_max=None):
     """
     Generate the coefficient variants, solve each one's own spectrum
     (escalating that variant's own NUM_STATES if its hot-end thermal
@@ -849,6 +857,9 @@ def run_coefficient_sweep(base_cv_results, my_potential, base_params,
         own final (post-escalation) values, so every variant's classical
         curve is computed exactly like the base one. `hot_state_safety`
         doubles as the scan's thermal coverage, as in the base run.
+    dx_max : float or None, optional
+        Grid-spacing bound (config.DVR_DX_MAX) of every variant's DVR
+        solves, quantum and classical, as in the base run.
 
     Returns
     -------
@@ -889,6 +900,7 @@ def run_coefficient_sweep(base_cv_results, my_potential, base_params,
             result = solve_variant_with_hot_coverage(
                 my_potential, params, num_states, beta_arr, mass, hbar,
                 hot_state_safety, num_states_growth, num_states_cap, max_escalation_rounds,
+                dx_max=dx_max,
             )
         except Exception as exc:
             potential_func = functools.partial(my_potential, p=params)
@@ -920,7 +932,7 @@ def run_coefficient_sweep(base_cv_results, my_potential, base_params,
         classical = _variant_classical_limit(
             functools.partial(my_potential, p=params), beta_arr, base_cv_results if is_base else None,
             xi_start, tol_xi, min_stable_xi, xi_multiplier, max_xi_steps, tol_cv, min_stable_n,
-            mass, hbar, hot_state_safety, xi_max)
+            mass, hbar, hot_state_safety, xi_max, dx_max=dx_max)
         n_missing = int(np.sum(np.isnan(classical)))
         if n_missing:
             classical_incomplete.append(value)
@@ -978,7 +990,8 @@ def run_coefficient_sweep(base_cv_results, my_potential, base_params,
 # =====================================================================
 def _variant_classical_limit(potential_func, beta_arr, base_cv_results,
                              xi_start, tol_xi, min_stable_xi, xi_multiplier, max_xi_steps,
-                             tol_cv, min_stable_n, mass, hbar, thermal_coverage, xi_max):
+                             tol_cv, min_stable_n, mass, hbar, thermal_coverage, xi_max,
+                             dx_max=None):
     """
     The classical-limit Cv(T) of one variant, on the shared temperature
     grid, from the same xi-scan (Classical_Limit_Numerical) and settings
@@ -994,7 +1007,7 @@ def _variant_classical_limit(potential_func, beta_arr, base_cv_results,
             potential_func, beta_arr,
             xi_start, tol_xi, min_stable_xi, xi_multiplier, max_xi_steps,
             tol_cv, min_stable_n, mass=mass, hbar=hbar,
-            thermal_coverage=thermal_coverage, xi_max=xi_max, verbose=True,
+            thermal_coverage=thermal_coverage, xi_max=xi_max, dx_max=dx_max, verbose=True,
         )
     except Exception as exc:
         # Same policy as a failed quantum solve: keep the sweep going and

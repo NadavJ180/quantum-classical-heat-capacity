@@ -239,12 +239,17 @@ class ScaledSpectra:
     dvr_tolerance : float, optional
         Convergence tolerance of every DVR solve, in units of V
         (default 1e-5, the base run's own tolerance).
+    dx_max : float or None, optional
+        Upper bound on every solve's grid spacing (config.DVR_DX_MAX;
+        default None = none), see `auto_configure_dvr`. xi^2 V has the
+        same feature widths as V, so one bound serves every xi; at large
+        xi the Nyquist rule is finer anyway and the bound is inactive.
     verbose : bool, optional
         Print the DVR's own per-solve console output (default False).
     """
 
     def __init__(self, potential_func, mass=1.0, hbar=1.0, thermal_coverage=20.0,
-                 span_factor=1.0, dx_factor=1.0, dvr_tolerance=1e-5, verbose=False):
+                 span_factor=1.0, dx_factor=1.0, dvr_tolerance=1e-5, dx_max=None, verbose=False):
         self.potential_func = potential_func
         self.mass = mass
         self.hbar = hbar
@@ -252,6 +257,7 @@ class ScaledSpectra:
         self.span_factor = span_factor
         self.dx_factor = dx_factor
         self.dvr_tolerance = dvr_tolerance
+        self.dx_max = dx_max
         self.verbose = verbose
         self._cache = {}
         self.solves = []        # one record per DVR solve, for diagnostics
@@ -289,7 +295,7 @@ class ScaledSpectra:
                 x_min, x_max, n_grid = auto_configure_dvr(
                     V_scaled, n_levels, mass=self.mass, hbar=self.hbar, x0_guess=self.x_at_min,
                     span_tol=tol, energy_ceiling=xi**2 * e_top,
-                    turning_points=(x_left, x_right), padding=padding)
+                    turning_points=(x_left, x_right), padding=padding, dx_max=self.dx_max)
                 if self.span_factor == 1.0 and self.dx_factor == 1.0:
                     energies = get_fully_converged_energy_levels(
                         V_scaled, n_levels, x_min, x_max, n_grid,
@@ -514,7 +520,7 @@ def sweep_temperature_range(potential_func, beta_arr,
                              xi_start, tol_xi, min_stable_xi, xi_mult, max_xi_steps,
                              tol_cv, min_stable_n, mass=1.0, hbar=1.0,
                              thermal_coverage=20.0, xi_max=np.inf, spectra=None,
-                             span_factor=1.0, dx_factor=1.0, verbose=True):
+                             span_factor=1.0, dx_factor=1.0, dx_max=None, verbose=True):
     """
     The classical-limit Cv(T) of `potential_func` at every beta in
     `beta_arr`: `converge_xi` on the shared xi ladder at each
@@ -545,6 +551,9 @@ def sweep_temperature_range(potential_func, beta_arr,
         factors); None builds a new one.
     span_factor, dx_factor : float, optional
         Grid factors for a new cache (Section 6's reference uses > 1).
+    dx_max : float or None, optional
+        Grid-spacing bound for a new cache (config.DVR_DX_MAX), see
+        `ScaledSpectra`. Ignored when `spectra` is given.
     verbose : bool, optional
         tqdm progress bar + a one-line summary.
 
@@ -569,7 +578,7 @@ def sweep_temperature_range(potential_func, beta_arr,
     if spectra is None:
         spectra = ScaledSpectra(potential_func, mass=mass, hbar=hbar,
                                 thermal_coverage=thermal_coverage,
-                                span_factor=span_factor, dx_factor=dx_factor)
+                                span_factor=span_factor, dx_factor=dx_factor, dx_max=dx_max)
     full_ladder = xi_start * xi_mult ** np.arange(max_xi_steps)
     xi_ladder = full_ladder[full_ladder <= xi_max]
     ladder_capped = len(xi_ladder) < len(full_ladder)

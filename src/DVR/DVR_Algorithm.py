@@ -33,7 +33,7 @@ import time
 # =====================================================================
 def auto_configure_dvr(potential_func, num_levels, mass=1.0, hbar=1.0, x0_guess=1.0,
                         span_tol=1e-5, span_growth_factor=1.3, max_span_iters=10,
-                        energy_ceiling=None, turning_points=None, padding=2.0):
+                        energy_ceiling=None, turning_points=None, padding=2.0, dx_max=None):
     """
     Automatically pick a converged grid window [x_min, x_max] and
     grid point count for a SMOOTH potential well.
@@ -112,6 +112,15 @@ def auto_configure_dvr(potential_func, num_levels, mass=1.0, hbar=1.0, x0_guess=
         widens the span until the energies stop changing, so a smaller
         padding is safe whenever the wavefunction tails are short -- as
         for xi^2 V at large xi, whose tails shrink as xi grows.
+    dx_max : float or None, optional
+        Upper bound on the grid spacing (default None: no bound). The
+        Nyquist rule above resolves the WAVEFUNCTIONS at the energy
+        ceiling, but the DVR also samples V itself at the grid points.
+        A potential with a feature narrower than the local de Broglie
+        wavelength (e.g. a narrow dimple) is then under-sampled: its
+        levels depend on where the grid points fall, and both the span
+        and the 3-pass checks fail. dx_max, a fraction of that feature's
+        width (config.DVR_DX_MAX), forces dx = min(Nyquist dx, dx_max).
 
     Returns
     -------
@@ -170,6 +179,9 @@ def auto_configure_dvr(potential_func, num_levels, mass=1.0, hbar=1.0, x0_guess=
     # of points grows as the span widens.
     k_max     = np.sqrt(2.0 * mass * (E_ceiling - v_min)) / hbar
     dx_target = np.pi / (2.0 * k_max)
+    # ... and fine enough to sample V's own narrowest feature (dx_max).
+    if dx_max is not None:
+        dx_target = min(dx_target, float(dx_max))
 
     def _n_pts(xlo, xhi):
         """Points to cover [xlo, xhi] at dx_target, with a floor of 4×num_levels."""
